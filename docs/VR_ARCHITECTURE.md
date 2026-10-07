@@ -139,6 +139,7 @@ device was unworn. The probe does not render game content and is not evidence of
 | Bridge/profile/retained-eye tests | Passed | Four host suites plus seven sfvr suites; production scene classifier, controller mapping and head-independent steering |
 | Stereo gameplay and simulation parity | Verified unattended | Cardinal-view candidate matched all 68 common simulation samples at frames 630–2640; final package matched all 38 samples at 630–1740 and exited cleanly at 60s |
 | Viewport, HUD and full-course coverage | Luigi Raceway cardinal views and HUD inspected; broader coverage pending | Actual yaw 0/90/180/270 eye images and settled HUD; intro cinema transition confirmed; 0.05 m near-plane floor correction inspected separately |
+| Private Amped Up 3D racers | Built, installed and native rendering verified unattended | Final external NRM `4ba53056…2437a8`; 269 model lists validated, ten importer tests passed, submitted eyes/HUD inspected and 38 final simulation samples matched stock |
 | User headset play | Not started | Unworn submitted GPU images inspected; controllers assumed by user request; wearer playtesting remains pending |
 
 ## Reproduction
@@ -204,7 +205,44 @@ full immersive viewport restoration, cloud projection and deferred HUD pose hand
 they do not replace GPU image inspection.
 
 Course-sector edges, objects outside the stock visibility envelope, transparency, every
-course's sky, jumbotron content, and wearer comfort still need broader playtesting. Private
-Amped model integration has a separate asset and runtime gate; stock renderer parity does
-not establish model readiness. Amped courses as additional cups are deferred from this
-first 3D-racer build; original courses and cup flow are preserved.
+course's sky, jumbotron content, and wearer comfort still need broader playtesting.
+Amped courses as additional cups are deferred from this first 3D-racer build;
+original courses and cup flow are preserved.
+
+## Private Amped Up 3D racers
+
+[The private importer](AMPED_UP.md) converts the official v3.21 patch's racer renderer
+and model data into an external `amped_up_3d_racers` recomp mod. It replaces only
+`render_kart`, retaining the original player tags, course rendering and cup flow.
+The ROM, patch and generated model NRM are local inputs/outputs and are excluded
+from source control. The NRM is installed in the Frame's app-data `mods` directory,
+outside the application package; the package's compiled source remains `dd3d7a1`.
+
+The native flat candidate `d69157bc…72e434` showed bounded 3D racers on Luigi Raceway
+in a Gamescope capture at game frame 810. All 125 common race-state samples at
+frames 630–4350 matched the stock flat baseline. The same mod completed a native
+90-second VR run: both submitted eyes and the HUD were inspected at yaw
+0/90/180/270, and all 68 race-state samples at frames 630–2640 matched the baseline.
+The runtime reported 72 Hz presentation and 30 Hz simulation, with approximately
+2.4 ms GPU time for both eyes in the sampled steady scene. These checks used forced
+rendering while unworn; they do not establish wearer comfort or controller operation.
+
+The final model NRM SHA256 is
+`4ba53056ba7428b99d2aa189e1bf662fdfc8ab1d7b7ad951bfd358d8bd2437a8`.
+After the final literal-root coverage repair, this artifact completed a separate
+60-second native VR run. Both submitted eyes and the HUD were inspected again,
+and all 38 common simulation samples at frames 630–1740 matched stock.
+Its importer validates 269 display lists, 3,681 command addresses and 340 vertex
+commands; all ten importer/ABI tests and both pinned mod compilation tools passed.
+
+The importer also covers renderer-selected LOD tables and literal model/effect
+display lists. The earlier malformed geometry came from an unconverted ROM vertex
+operand in a list selected by the renderer outside the initial package-root graph.
+The import now rejects unresolved references along those paths and caps the extracted
+helper at the original game's 660 effect matrices. Broader special-effect states,
+every character animation and every course still need playtesting.
+
+Local submitted images, native logs, import reports and simulation comparisons are
+preserved under ignored `build-linux-vr-validation/amped/`. The normal Steam title
+`Devkit Game: MarioKart64VR` enables the model mod and runs without diagnostic autostart,
+forced rendering, capture or automatic-exit settings.

@@ -1,0 +1,16 @@
+[manifest]
+id = "amped_up_3d_racers"
+version = "3.21.0"
+display_name = "Amped Up 3D Racers"
+description = "Private local import of the Amped Up v3.21 racer models for the NTSC-U MK64 recompilation."
+short_description = "Replaces the stock kart models with Amped Up's 3D racers."
+authors = ["Litronom"]
+game_id = "mk64"
+minimum_recomp_version = "0.9.2"
+dependencies = []
+
+[inputs]
+elf_path = "../../build/amped_up/amped_up_model.elf"
+mod_filename = "amped_up"
+func_reference_syms_file = "../../MarioKart64RecompSyms/mk64.us.syms.toml"
+data_reference_syms_files = []

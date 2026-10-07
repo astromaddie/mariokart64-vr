@@ -1,0 +1,327 @@
+# Retail ROM and official v3.21 BPS identities. The patch and both ROMs remain private.
+[rom]
+source_sha256 = "d6b8538dd63f0132ecb2856e7d32816ed3c30e3e479aecd23cf83fb6ba17a5da"
+source_crc32 = "434389c1"
+patch_sha256 = "5de554345e9d5566cda2b1ef5ea0d7b390e2f8c282bd876f2312bb331ce0a49a"
+target_sha256 = "b41470704489b3741e09e430e08c5153e750c14852aab77fe657de9d1a630a5a"
+target_crc32 = "711f70f4"
+
+[segment]
+rom_start = "0xE00000"
+ram_start = "0x80400000"
+length = "0x32E3B0"
+
+[retail_memory]
+heap_pool_end = "0x80242F00"
+static_noload_end = "0x803FFDB0"
+expansion_ram_end = "0x80800000"
+
+# Three eight-entry racer-model tables recovered from the patched binary.
+[[tables]]
+name = "skeletons"
+ram_address = "0x805A4740"
+entries = 8
+
+[[tables]]
+name = "animations"
+ram_address = "0x805A5400"
+entries = 8
+
+[[raw_racer_colour_records]]
+ram_address = "0x805ADAC8"
+entries = 8
+stride = 6
+fields = 3
+
+# The stock loader's slot-0 (marker 0xFFFE0000) high-detail package for each
+# racer. It DMA-copies ROM [rom_start, rom_end) to ram_address, then scans
+# each 8-byte record and rebases G_DL/G_SETTIMG pointers into that source range.
+# The nine leading 8-byte entries are model display-list selectors; offset 0x90
+# is the package's shared geometry root. Slot-2 rows intentionally stay unused.
+[model_package_table]
+ram_address = "0x805A5D88"
+row_stride = 16
+rows_per_character = 8
+expected_marker = "0xFFFE0000"
+
+[[model_packages]]
+name = "mario"
+row_index = 0
+ram_address = "0x805C6E10"
+rom_start = "0x1529820"
+rom_end = "0x152E4B0"
+entry_count = 9
+geometry_root_offset = "0x90"
+
+[[model_packages]]
+name = "luigi"
+row_index = 8
+ram_address = "0x805CC610"
+rom_start = "0x152E4B0"
+rom_end = "0x1532EC0"
+entry_count = 9
+geometry_root_offset = "0x90"
+
+[[model_packages]]
+name = "yoshi"
+row_index = 16
+ram_address = "0x805D2610"
+rom_start = "0x1532EC0"
+rom_end = "0x1538F30"
+entry_count = 9
+geometry_root_offset = "0x90"
+
+[[model_packages]]
+name = "toad"
+row_index = 24
+ram_address = "0x805DA210"
+rom_start = "0x1538F30"
+rom_end = "0x153B200"
+entry_count = 9
+geometry_root_offset = "0x90"
+
+[[model_packages]]
+name = "d_kong"
+row_index = 32
+ram_address = "0x805E0610"
+rom_start = "0x153B200"
+rom_end = "0x1540D80"
+entry_count = 9
+geometry_root_offset = "0x90"
+
+[[model_packages]]
+name = "wario"
+row_index = 40
+ram_address = "0x805E7E10"
+rom_start = "0x1540D80"
+rom_end = "0x1545B70"
+entry_count = 9
+geometry_root_offset = "0x90"
+
+[[model_packages]]
+name = "peach"
+row_index = 48
+ram_address = "0x805EE610"
+rom_start = "0x1545B70"
+rom_end = "0x154AD70"
+entry_count = 9
+geometry_root_offset = "0x90"
+
+[[model_packages]]
+name = "bowser"
+row_index = 56
+ram_address = "0x805F5610"
+rom_start = "0x154AD70"
+rom_end = "0x1551580"
+entry_count = 9
+geometry_root_offset = "0x90"
+
+# The custom renderer also selects static display-list roots from these four
+# eight-entry tables. They cover the character-specific near/far LOD lists and
+# the package's alternate list starts. Every root is walked below alongside the
+# DMA package roots so its nested G_DL, G_VTX, and G_SETTIMG operands are fixed.
+[[model_static_display_list_tables]]
+name = "character_lod_far"
+ram_address = "0x805A46C0"
+entries = 8
+expected_pointers = ["0x805ADD80", "0x805B0E00", "0x805B4090", "0x805B7520", "0x805B9CB0", "0x805BD0A0", "0x805C0520", "0x805C39A0"]
+
+[[model_static_display_list_tables]]
+name = "character_lod_near"
+ram_address = "0x805A46E0"
+entries = 8
+expected_pointers = ["0x805ADE80", "0x805B0F00", "0x805B41C8", "0x805B7620", "0x805B9DD0", "0x805BD1A0", "0x805C0668", "0x805C3AC0"]
+
+[[model_static_display_list_tables]]
+name = "package_alternate_start_a"
+ram_address = "0x805A4700"
+entries = 8
+expected_pointers = ["0x805C6E90", "0x805CC690", "0x805D2690", "0x805DA290", "0x805E0690", "0x805E7E90", "0x805EE690", "0x805F5690"]
+
+[[model_static_display_list_tables]]
+name = "package_alternate_start_b"
+ram_address = "0x805A4720"
+entries = 8
+expected_pointers = ["0x805C6E80", "0x805CC680", "0x805D2680", "0x805DA280", "0x805E0680", "0x805E7E80", "0x805EE680", "0x805F5680"]
+
+# The renderer also emits these literal roots directly from its character and
+# detail-mode selectors. The first root changes RDP state only; the remaining
+# roots contain shared static racer geometry and nested display lists.
+[[model_emitted_display_list_roots]]
+name = "character_state"
+ram_address = "0x805ADA30"
+geometry = false
+
+[[model_emitted_display_list_roots]]
+name = "character_detail_a"
+ram_address = "0x805AADC0"
+geometry = true
+
+[[model_emitted_display_list_roots]]
+name = "character_detail_b"
+ram_address = "0x805AADF0"
+geometry = true
+
+[[model_emitted_display_list_roots]]
+name = "character_detail_c"
+ram_address = "0x805ABB88"
+geometry = true
+
+[[model_emitted_display_list_roots]]
+name = "character_detail_d"
+ram_address = "0x805ABB30"
+geometry = true
+
+[[model_emitted_display_list_roots]]
+name = "character_detail_e"
+ram_address = "0x805ABB60"
+geometry = true
+
+[[model_emitted_display_list_roots]]
+name = "renderer_helper_805A6B30"
+ram_address = "0x805A89B8"
+geometry = true
+
+[[model_emitted_display_list_roots]]
+name = "renderer_helper_805A6C40"
+ram_address = "0x805A8160"
+geometry = true
+
+# Both renderer helpers select the indexed root as 0x805AD880 + arg3 * 0x30.
+# The checked selector range covers the eight racer slots. All entries are
+# state-only lists; their common nested state list is also reachable elsewhere.
+[[model_emitted_display_list_ranges]]
+name = "character_indexed_state"
+ram_start = "0x805AD880"
+stride = "0x30"
+expected_roots = ["0x805AD880", "0x805AD8B0", "0x805AD8E0", "0x805AD910", "0x805AD940", "0x805AD970", "0x805AD9A0", "0x805AD9D0"]
+geometry = false
+
+# These are typed stock animation structures. Amped stores them as direct
+# KSEG pointers, while the stock animation routines pass every such pointer
+# through segmented_to_virtual (which indexes the full high byte). Convert
+# their data fields to segment-0 offsets during private import. The game sets
+# segment 0 to physical base 0 (SEG_START=0x80000000).
+[[cpu_pointer_tables]]
+name = "skeletons"
+ram_address = "0x805A4740"
+entries = 8
+kind = "armature"
+
+[[cpu_pointer_tables]]
+name = "animations"
+ram_address = "0x805A5400"
+entries = 8
+kind = "animation"
+
+[[cpu_pointer_tables]]
+name = "secondary_animation_list"
+ram_address = "0x805AA6A8"
+entries = 1
+kind = "animation"
+
+[[cpu_pointer_roots]]
+name = "secondary_mario_armature"
+ram_address = "0x805AA538"
+kind = "armature"
+
+[[cpu_pointer_roots]]
+name = "secondary_mario_armature_alt"
+ram_address = "0x805AA5F0"
+kind = "armature"
+
+# These four LUI words form arguments for direct calls to the stock animation
+# function. Lowering the upper byte makes the resulting values segment-0
+# pointers without changing any CPU-side address calculations elsewhere.
+[[code_patches]]
+address = "0x805A6838"
+expected_word = "0x3C05805B"
+replacement_word = "0x3C05005B"
+purpose = "stock render_animated_model arg1: secondary animation list"
+
+[[code_patches]]
+address = "0x805A6850"
+expected_word = "0x3C04805B"
+replacement_word = "0x3C04005B"
+purpose = "stock render_animated_model arg0: secondary Mario armature"
+
+[[code_patches]]
+address = "0x805A694C"
+expected_word = "0x3C05805B"
+replacement_word = "0x3C05005B"
+purpose = "stock render_animated_model arg1: secondary animation list"
+
+[[code_patches]]
+address = "0x805A6964"
+expected_word = "0x3C04805B"
+replacement_word = "0x3C04005B"
+purpose = "stock render_animated_model arg0: alternate secondary armature"
+
+# 804ADE40 indexes gGfxPool->mtxEffect using gMatrixEffectCount. The retail
+# pool has 660 Mtx entries; Amped's original 960 check crosses into later GfxPool
+# fields, so cap this extracted helper at the verified stock allocation bound.
+[[code_patches]]
+address = "0x804ADE54"
+expected_word = "0x286603C0"
+replacement_word = "0x28660294"
+purpose = "bound Amped effect matrices to the 660-entry retail mtxEffect array"
+
+# Code copied from the patched image and recompiled as MIPS functions by N64Recomp.
+# Extents are half-open; these cover the renderer and its complete traced custom call graph.
+[[code_functions]]
+name = "amped_model_renderer"
+start = "0x805A7140"
+size = "0xD08"
+
+[[code_functions]]
+name = "amped_select_character"
+start = "0x805A6650"
+size = "0x4E0"
+
+[[code_functions]]
+name = "amped_character_mode"
+start = "0x805A6D30"
+size = "0x350"
+
+[[code_functions]]
+name = "amped_helper_805A6B30"
+start = "0x805A6B30"
+size = "0x110"
+
+[[code_functions]]
+name = "amped_helper_805A6C40"
+start = "0x805A6C40"
+size = "0xF0"
+
+[[code_functions]]
+name = "amped_helper_8044F180"
+start = "0x8044F180"
+size = "0x30"
+
+[[code_functions]]
+name = "amped_helper_8044F1B0"
+start = "0x8044F1B0"
+size = "0x30"
+
+[[code_functions]]
+name = "amped_helper_8044F1E0"
+start = "0x8044F1E0"
+size = "0x30"
+
+[[code_functions]]
+name = "amped_helper_804ADE40"
+start = "0x804ADE40"
+size = "0x1CC"
+
+[[code_functions]]
+name = "amped_helper_804AE5A0"
+start = "0x804AE5A0"
+size = "0x58"
+
+[stock_calls]
+"0x800224F0" = "adjust_angle"
+"0x802ABE30" = "calculate_surface_height"
+"0x802B5F74" = "mtxf_pos_rotation_xyz"
+"0x802B75F8" = "mtxf_to_mtx"
+"0x80004DFC" = "render_animated_model"
+"0x800CE140" = "sqrtf"

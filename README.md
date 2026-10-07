@@ -3,6 +3,8 @@
 This branch adds optional native standalone Steam Frame VR through OpenXR on Linux ARM64.
 Build with `MK64_VR=ON`; flat mode remains the default. See [the VR architecture and validation](docs/VR_ARCHITECTURE.md)
 and [the native build script](tools/docker/build-linux.sh). The original game ROM is required.
+The [private Amped Up racer importer](docs/AMPED_UP.md) adds its 3D racers as a recomp mod
+while retaining the original courses and cups. It requires the official v3.21 patch locally.
 
 MarioKart 64: Recompiled is a project that uses [N64: Recompiled](https://github.com/Mr-Wiseguy/N64Recomp) to **statically recompile** MarioKart 64 into a native port with many new features and enhancements. This project uses [RT64](https://github.com/rt64/rt64) as the rendering engine to provide some of these enhancements.
 

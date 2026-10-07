@@ -86,3 +86,6 @@ gamecontrollerdb.txt
 *.sav
 /build-vrtest/
 /build-sfvrtest/
+
+# Private local Amped Up model import (contains non-distributable game assets).
+/mods/amped_up.nrm
