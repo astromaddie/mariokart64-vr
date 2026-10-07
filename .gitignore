@@ -84,3 +84,5 @@ gamecontrollerdb.txt
 
 # Controller pak saves
 *.sav
+/build-vrtest/
+/build-sfvrtest/

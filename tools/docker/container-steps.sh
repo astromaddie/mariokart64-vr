@@ -59,7 +59,7 @@ step_build() {
 		-DPATCHES_C_COMPILER=clang-15 -DPATCHES_LD=ld.lld-15 \
 		-DN64_RECOMP_EXECUTABLE="$build/n64recomp/N64Recomp" \
 		-DCMAKE_C_FLAGS="$flags" -DCMAKE_CXX_FLAGS="$flags" \
-		-DNFD_PORTAL=ON \
+		-DNFD_PORTAL=ON -DMK64_VR="${MK64_VR:-OFF}" \
 		-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON '-DCMAKE_INSTALL_RPATH=$ORIGIN/lib'
 	cmake --build "$build" --target MarioKart64Recompiled -j "$jobs"
 	file "$build/MarioKart64Recompiled"
@@ -89,7 +89,7 @@ step_smoke() {
 	set +e
 	xvfb-run -a -s '-screen 0 1280x720x24' \
 		env HOME="$data/home" APP_FOLDER_PATH="$data" SDL_AUDIODRIVER=dummy \
-		SDL_VIDEODRIVER=x11 timeout "${SMOKE_SECONDS:-30}s" "$out/LAUNCH-STEAM-FRAME.sh"
+		SDL_VIDEODRIVER=x11 timeout --kill-after=5s "${SMOKE_SECONDS:-30}s" "$out/LAUNCH-STEAM-FRAME.sh"
 	status=$?
 	set -e
 	echo "smoke exit status $status (124 means the app stayed open until timeout)"

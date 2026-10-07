@@ -66,7 +66,7 @@ run_step() {
 	local name="$1"
 	shift
 	local args=(docker run --rm --platform linux/arm64 -v "$repo:/src" -w /src)
-	args+=(-e "BUILD_DIR=$build_dir" -e "JOBS=$jobs" -e "SOURCE_METADATA_FILE=/src/$build_dir/source-metadata.json")
+	args+=(-e "BUILD_DIR=$build_dir" -e "JOBS=$jobs" -e "MK64_VR=${MK64_VR:-OFF}" -e "SOURCE_METADATA_FILE=/src/$build_dir/source-metadata.json")
 	local image_id
 	image_id="$(docker image inspect "$image" --format '{{.Id}}')"
 	args+=(-e "MK64_FRAME_IMAGE=$image" -e "MK64_FRAME_IMAGE_ID=$image_id")

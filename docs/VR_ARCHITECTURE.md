@@ -6,11 +6,14 @@ The target is a standalone Steam Frame running a native Linux AArch64 build thro
 ARM64 runtime. The flat renderer uses Vulkan through SDL2 and RT64. An Android/Lepton route is
 not part of the current build path.
 
-The original upstream flat build is the baseline for future renderer work. The source uses the
-RT64 revision pinned by `lib/rt64`; it does not contain the Plume VR hooks present in the newer
-DK64/Banjo renderer. Keep the original game/runtime and renderer context as the baseline, then
-assess a renderer-only migration separately. No RT64 upgrade or VR rendering change is included
-in this build-foundation step.
+The original renderer package remains the flat comparison baseline in
+`build-linux-aarch64/package/MarioKart64Recompiled`. Source now adopts the author's
+`upstream/NewFrontend` revision `621e7323692c98a1c1c944a0a19db88e94e51246`, with modern
+RT64/Plume, RecompFrontend and N64ModernRuntime. This is an explicit author-base upgrade,
+not a renderer-only backport. It retains the ARM64 build/provenance scripts and probe.
+The author's changes also alter audio/input, object angular culling and jumbotron guards;
+they must be distinguished from subsequent VR changes. The stock author frontend is retained;
+no custom VR UI or assets are approved or implemented.
 
 The pinned-source ARM64 build, package and dependency checks pass. A 30-second Xvfb/lavapipe
 smoke run loaded the application UI assets and stayed open until its timeout. The package's
@@ -19,9 +22,14 @@ has no D-Bus session bus, so SDL prints a D-Bus assertion during timeout shutdow
 native probe created a SteamVR/OpenXR session and submitted one stereo frame. A second probe
 run read back those submitted images and verified distinct uniform left/right colors on the
 Frame GPU. The flat game launches through Steam and its launcher has been captured through
-Gamescope. Entry into gameplay and simulation-rate measurements remain pending. The user
-explicitly authorized proceeding with controllers assumed to work; controller playtesting
-remains unverified. These results do not establish game VR readiness.
+Gamescope. The original flat game reached attract-mode racing on the Frame. The modern diagnostic flat
+package `15343d9c…584a7` reached a real one-player Luigi Raceway race through the original menus:
+production frames 630–1140 advanced 30/second while VI advanced 60/second, and the race timer,
+AI state digest and audio counters advanced. The corrected native VR package `d770b106…a5a0743b`
+matched all 68 common simulation samples at game frames 630–2640, including native race clock
+and all eight players. Actual submitted eye/HUD images were inspected at yaw 0/90/180/270.
+The user authorized proceeding with controllers assumed to work; controller and wearer
+playtesting remain unverified. Only Luigi Raceway has unattended game-scene coverage.
 
 ## Camera and simulation
 
@@ -32,44 +40,83 @@ not a head pose. The game produces N64 display lists, while RT64 interprets thei
 projection and viewport state. The current `RT64Context::send_dl` resets RT64's RSP state and
 processes each display list; `update_screen` calls the ordinary RT64 presentation path.
 
-The project advertises high-refresh rendering with the original game logic unchanged. The
-relationship between the game's VI/tick callbacks, RT64 interpolation, and a future
-`xrWaitFrame`-paced loop still needs a production-path audit. Until then, do not advance game
-state per eye or replace the renderer's existing presentation cadence by assumption.
+`patches/frame_report.c` publishes one native camera/scene snapshot at the end of each game
+frame. The host retains RT64 workloads and renders both eyes from one predicted head pose;
+it does not rerun game logic for each eye. The existing game VI and 30 Hz simulation stay intact.
+Standby pauses at the publication boundary outside game locks, unless the explicit unattended
+`force_render` diagnostic is enabled. Menus, pause and split screen use cinema/panel modes.
+The original letterboxed race intro stays in cinema until the native race clock advances;
+both the scene classifier and render-only patches use that same boundary.
 
 ## Draw and viewport inventory
 
-This is the initial inventory from the game camera structures and RT64 RSP/RDP path. It names
-the work categories; it does not claim every display-list branch or special effect has been
-audited.
+This inventory traces the shared production paths. It is not exhaustive certification of
+all course display lists or object variants.
 
-| Draw path | Current source path | Future stereo rule | State |
-| --- | --- | --- | --- |
-| Track, kart and other 3D geometry | Game display lists through RT64 RSP matrix stacks and raster draw calls | Render the original world transforms once per eye with eye-offset view matrices; retain depth and texture effects | Not started |
-| One-to-four player viewports | Per-camera game viewport/projection state and RT64 viewport/scissor data | Inventory split-screen modes and map each active player camera to its own full-eye projection before implementation | Not started |
-| HUD, menus and 2D sprites | Game display lists and RT64 RDP/S2DEX-related sprite paths; exact draw sites remain to be traced | Classify each layer and place it on a stable quad or deliberate in-world surface; preserve alpha and ordering | Not started |
-| Sky, fog, screen effects and transitions | RT64 display-list/RDP state and game-specific effect passes; exact per-scene use remains to be traced | Preserve the game's effect timing once per XR frame and verify coverage at synthetic yaw angles | Not started |
-| Native culling and clipping | Game display-list branches, RT64 RSP transform/cull state, and RDP scissor rectangles | Test back/near geometry and all camera yaw directions; classify any screen-space culling assumptions | Not started |
+| Draw path | Production entry point | Required VR treatment and current limit |
+| --- | --- | --- |
+| 1P world projection | `patches/camera.c:render_player_one_1p_screen`, group `0xFFFFAAAA` | Original chase view plus one predicted head pose; retained workload replay per eye. Split groups `0xFFFFAAAB..AAB2` stay on cinema. |
+| Course visibility | `render_course_segments` | Preserve track-section/collision selection. Each section selects one of four directional lists using the latest predicted head yaw only on the VR draw path. Sector-edge coverage still needs device inspection. A naive union is unsafe: lists carry state, nested calls and transparent surfaces. |
+| World object culling | `patches/render_distance.c:is_within_render_distance` | Preserve radial limits while removing camera angular rejection only on the VR rendering path. |
+| Object visibility flags | `is_object_visible_on_camera` | Used by update/visibility accounting as well as rendering; requires care before widening. |
+| Kart camera collision | `check_player_camera_collision` | Also called by AI/player simulation. Must remain unchanged; it is not a rendering-only gate. |
+| Stock kart/player | `object_tagging.c:render_player`, `improvements.c:render_kart` | Preserve player transform tags and palette/TLUT behavior. Optional private 3D-racer NRM replaces only the kart draw. |
+| HUD | 1P camera tail calls `func_80058BF4`, `func_80058C20`, `func_80093A5C`, `render_hud`; `patches/hud.c` | Distinguish HUD projection group from world before the first HUD draw; retained black/white solve for a transparent quad. |
+| Gradient sky/ground | `background.c:func_802A4A0C`, native `func_802A487C` | VR 1P uses a 16-sector surrounding gradient with original course colours, tagged 0xFFFFAAE0 and rendered without eye/head translation. Flat retains original quads. |
+| Clouds/stars | `func_800788F8` updates visibility/screen X; `object_tagging.c:func_80051ABC` draws textures | Authored yaw and height live in the object. VR 1P builds tangent quads from authored yaw/height, retaining textures and star alpha. Segmented vertex addresses are translated before CPU reads. Alignment remains a device check. |
+| World billboards | `object_tagging.c`, including bats and paletted objects | Identify camera-facing groups separately from kart models; preserve textures and face the centre-eye view. |
+| Scissors/aspect | background fixed scissors; HUD extended scissors; world viewport | Eye projection uses runtime asymmetry; HUD keeps original alignment on its own panel. |
+| Jumbotron | `patches/jumbotron.c` Luigi Raceway/Wario Stadium previous-frame crops | Preserve offscreen framebuffer draws/copy timing once per game frame, never copy one eye into simulation. |
+| Transparency/fog | Course/object display-list state | Preserve native order and fog coefficients when eye near plane changes; do not merge directional lists without state/order proof. |
+
+## Game-frame diagnostics
+
+`--game mk64` (also `mk64.us`) starts only after the stored US ROM passes the runtime's
+existing hash validation. The launcher remains available when no valid ROM is stored.
+`MK64_DIAG_FRAMES=N` records every Nth production `end_master_display_list` call:
+VI/audio/rumble callback counters, game state, screen mode, course/demo/pause, native game
+timer/race clock and a digest of all eight racers' positions, speed, lap and rank. Camera
+and wall time are excluded from the state digest. The MIPS/native structure is statically
+checked. This instrumentation does not by itself prove flat/VR parity.
+
+`MK64_DIAG_AUTOSTART=45` enables a bounded deterministic native-pad script: Start at game
+frame 150, then A every 45 frames, held for five frames. It stops on entry into a real 1P
+race or at 45*30 game frames. It changes no menu/race variables directly and is off by
+default. Controller playtesting remains pending.
 
 ## Renderer and input boundaries
 
-Linux creates an SDL Vulkan window. `RT64Context` passes the SDL window to RT64, submits the
-game's display lists, and presents with RT64's normal `updateScreen` call. There is no OpenXR
-instance, session, Vulkan XR binding, swapchain, per-eye camera, or OpenXR controller action
-path in this source state.
+`MK64_VR` defaults OFF. ON installs the committed generic host from Banjo revision
+`b426f05f3722a4e947a5c224601e906eff158c65`, with Mario Kart scene/profile/input adaptations.
+RT64 is pinned to `0b59675ded29a010f5035600d88e877046f7c9d3` and Plume to
+`1699a49cabc1a29d9470d9ee5192b7c176865c17`. The author frontend stays at
+`c3bc7a2e9eff532c7f55b28d78fc4e07afb923aa` with runtime
+`6021a7d9f6e970ebdd078951441502343f3b0453`; the older Banjo frontend API is incompatible.
+No modifications to those dependencies are required. If no OpenXR runtime is present, the application falls back to the stock flat UI.
 
-The game input callback polls the existing SDL/game-controller mapping path and feeds the
-runtime's N64 pad state. The Steam Frame profile and how SteamVR exposes that controller to SDL
-remain pending a controller playtest. The user authorized assuming controller operation while
-implementation proceeds.
+OpenXR uses the Steam Frame controller profile first and merges real actions into the N64 pad.
+A is accelerate/confirm, X is brake/B, left bumper/trigger Z, right bumper/trigger R,
+left stick-click L, right stick-click C-up, and B/Y/right stick retain C-buttons. Steering stays
+kart-relative regardless of head yaw. View retains recentre and the original frontend access.
+Manual Steam dashboard reopening is not disabled. Controller operation is assumed at the user's
+request, not playtested. Custom VR menu entrypoints are deliberately inactive; configuration is
+`vr.toml` under the app data folder or `MK64_VR_*` environment overrides.
+
+The initial calibration is explicitly provisional: 10 game units/metre, with the stock chase
+camera, source pitch, runtime eye separation and a 0.05 m VR near plane. The source 9-unit
+near plane becomes 0.9 m at this scale and visibly clips the floor at headset FOV; actual
+Frame eye captures confirmed that 0.05 m removes the strip. RT64 remaps fog from the source
+projection when changing the near plane. It is not a measured kart
+height. Resolution is the runtime recommendation and refresh request 72 Hz; foveation is off.
+World scale can be adjusted with `MK64_VR_WORLD_SCALE`. No physical dimensions are inferred
+from the Amped racer colour tables or collision radius.
 
 ## Frame protocol and probe gate
 
-No XR frame protocol is implemented. A later stereo path must take display time and poses from
-`xrWaitFrame`, advance simulation and animation once per XR frame, render a complete pass per
-eye first, then submit one projection layer. The graphics binding and swapchain format are
-measured by the standalone Vulkan OpenXR colour probe: SteamVR/OpenXR 2.17.10 accepted two
-1728×1728 sRGB swapchains with UNORM views on a Turnip Adreno 750 GPU.
+The host uses `xrWaitFrame` prediction, one pose for both eyes, RT64 eye slots, Vulkan
+swapchain images, and a distinct transparent HUD quad. The HUD is tagged 0xFFFFAAE1 and solved
+from black/white retained passes. The standalone colour probe measured SteamVR/OpenXR 2.17.10
+accepting two 1728×1728 sRGB swapchains with UNORM views on a Turnip Adreno 750 GPU.
 
 The readback probe submitted one valid stereo frame and verified every pixel of the left
 image as RGBA `230,13,26,255` and the right image as `13,38,230,255`. It copied the same
@@ -80,10 +127,75 @@ device was unworn. The probe does not render game content and is not evidence of
 
 | Milestone | Status | Evidence |
 | --- | --- | --- |
-| Linux AArch64 flat build, package and ABI | Passed on host | ARM64 ELF, staged dependency closure and package metadata; `GLIBC_2.34` maximum, no `GLIBCXX` requirement |
+| Linux AArch64 flat build, package and ABI | Passed on host | ARM64 ELF, staged dependency closure and package metadata; original `GLIBC_2.34`, modern author-base `GLIBC_2.35` maximum, no `GLIBCXX` requirement |
 | Xvfb/lavapipe launch smoke | Passed for 30 seconds | UI assets loaded; process remained alive until timeout; D-Bus assertion occurs at shutdown in the bus-less container |
-| Steam Frame install and flat launch | Launcher verified unattended | Native package installed as `MarioKart64FlatBaseline`; Gamescope capture shows the launcher; gameplay entry pending |
-| Flat Steam launch and persistent data | Configured; gameplay checks pending | ROM/configs outside the package in `~/.local/share/MK64FrameBaseline`; controller operation assumed at user request |
+| Steam Frame install and flat launch | Attract racing verified unattended | Native original package `d6d40e9c…26d`; Gamescope capture shows Yoshi Valley split-screen attract race |
+| Modern flat race and rates | Verified unattended | Real 1P Luigi Raceway via scripted original menus;30 game frames and 60 VI per second; data outside the package |
 | Standalone Vulkan OpenXR colour probe | GPU readback and submission passed | SteamVR/OpenXR 2.17.10, Turnip Adreno 750, two 1728×1728 sRGB swapchains with UNORM views; distinct uniform colors verified across the submitted images |
-| Stereo gameplay and HUD inventory | Not started | No VR render path |
-| User headset play | Not started | The game build has not been worn or visually checked |
+| Native VR build, package and ABI | Passed | Validated stock candidate `d770b106…a5a0743b`; GLIBC 2.35 maximum; actual native 1P eye/HUD submission |
+| Bridge/profile/retained-eye tests | Passed | Four host suites plus seven sfvr suites; production scene classifier, controller mapping and head-independent steering |
+| Stereo gameplay and simulation parity | Verified unattended | Corrected native 1P race submitted eyes/HUD and exited at 90s; all 68 common simulation samples match the modern flat run at frames 630–2640 |
+| Viewport, HUD and full-course coverage | Luigi Raceway cardinal views and HUD inspected; broader coverage pending | Actual yaw 0/90/180/270 eye images and settled HUD; intro cinema transition confirmed; 0.05 m near-plane floor correction inspected separately |
+| User headset play | Not started | Unworn submitted GPU images inspected; controllers assumed by user request; wearer playtesting remains pending |
+
+## Reproduction
+
+Build with the same pinned native ARM64 image and verified ROM input:
+
+```sh
+MK64_ROM=/tmp/mariokart64-vr-build-rom.z64 MK64_VR=ON BUILD_DIR=build-linux-vr JOBS=8 tools/docker/build-linux.sh all
+cmake -S src/vr/tests -B build-vrtest
+cmake --build build-vrtest -j8
+ctest --test-dir build-vrtest --output-on-failure
+cmake -S third_party/sfvr -B build-sfvrtest
+cmake --build build-sfvrtest -j8
+ctest --test-dir build-sfvrtest --output-on-failure
+```
+
+For unattended diagnostic eye captures only, use a fresh app data folder containing the
+validated `mk64.us.z64`, set `APP_FOLDER_PATH` in the launcher environment, and launch:
+
+```sh
+MK64_DIAG_AUTOSTART=90 MK64_DIAG_FRAMES=30 MK64_VR_FORCE_RENDER=1 \
+MK64_VR_DUMP_FRAME=120 MK64_VR_DUMP_IN_PLAY=1 MK64_VR_DUMP_COUNT=4 \
+MK64_VR_DUMP_INTERVAL=720 MK64_VR_DIAG_YAW_STEP=90 \
+MK64_VR_DIAG_EXIT_SECONDS=90 MK64_VR_TIMING=1 ./LAUNCH-STEAM-FRAME.sh --game mk64
+```
+
+`vr-dumps` in that data folder receives actual submitted eye/panel/HUD images with yaw 0/90/180
+/270 suffixes. Forced rendering while unworn is not wearer acceptance. Check world and HUD alignment,
+course-sector boundaries, stock billboard/visibility omissions, cloud placement, transparency,
+and jumbotron contents. Native AI/camera-collision and object-update visibility are intentionally
+unchanged; full 360-degree object coverage is not yet established. The model NRM has its own
+runtime gate and should remain disabled for the stock-renderer comparison.
+
+The validated stock VR snapshot is `build-linux-vr-intro2/package/MarioKart64Recompiled`
+(binary SHA256 `d770b10685a3593a0b1758074da630d83f8f9ca2a2c5a65a797d7634a5a0743b`).
+The matching OFF snapshot is `build-linux-flat-intro2/package/MarioKart64Recompiled`
+(binary SHA256 `1f8e61198756bc25f0ffacaa9486e4b80e40a66d3d06d005a64f9dfd8c2e570f`).
+Each retains its matching unstripped executable above `package/`. The later near-plane run
+uses the VR snapshot with `MK64_VR_EYE_NEAR_M=0.05`, the new source default.
+Local evidence, logs and the comparison JSON are preserved under ignored
+`build-linux-vr-validation/stock/`; the comparison excludes presentation/camera fields.
+
+## Render invariants and limitations
+
+Active immersive 1P uses the full 320×240 source viewport/scissor before world and sky.
+The original race intro remains in cinema; neither screen dimensions nor simulation camera
+wrappers are changed. The cloud draw restores its perspective after the native HUD wrapper.
+The surrounding gradient keeps original course colours and cloud/star textures.
+
+The optional OpenXR hidden-area mask is off by default; `RT64_VR_HIDDEN_MASK=1` enables it
+for diagnostics. No RT64 changes were needed beyond using the pinned retained-eye fork.
+
+The native HUD starts lapX at −40 and timerX at 300, then animates them to 83/228 with
+intentional afterimages. That original animation remains. Diagnostic yaw is latched until
+the corresponding HUD readback is recorded. Source contracts check sky/world/HUD boundaries,
+full immersive viewport restoration, cloud projection and deferred HUD pose handling;
+they do not replace GPU image inspection.
+
+Course-sector edges, objects outside the stock visibility envelope, transparency, every
+course's sky, jumbotron content, and wearer comfort still need broader playtesting. Private
+Amped model integration has a separate asset and runtime gate; stock renderer parity does
+not establish model readiness. Amped courses as additional cups are deferred from this
+first 3D-racer build; original courses and cup flow are preserved.

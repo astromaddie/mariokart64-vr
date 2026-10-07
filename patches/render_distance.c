@@ -1,4 +1,5 @@
 #include "patches.h"
+#include "vr_render.h"
 
 #if 1 // Draw Distance Improved@tb181
 RECOMP_PATCH f32 is_within_render_distance(Vec3f cameraPos, Vec3f objectPos, u16 orientationY, f32 minDistance, f32 fov,
@@ -17,7 +18,7 @@ RECOMP_PATCH f32 is_within_render_distance(Vec3f cameraPos, Vec3f objectPos, u16
     maxDistance *= 6.5f;
     scaleFov = 1.25;
 
-    f32 extended_fov = ((f32) fov * 0xB6 * scaleFov); // Sets the Culling for objects on the left and right
+    f32 extended_fov = ((f32) fov * 300 * scaleFov); // Sets the Culling for objects on the left and right
 
 
     distanceX = objectPos[0] - cameraPos[0];
@@ -40,6 +41,8 @@ RECOMP_PATCH f32 is_within_render_distance(Vec3f cameraPos, Vec3f objectPos, u16
     if (distance > maxDistance) {
         return -1.0f;
     }
+
+    if (mk64_vr_world()) return distance / 10.0f;
 
     angleObject = get_angle_between_two_vectors(cameraPos, objectPos);
     minus_fov_angle = (orientationY - extended_fov);

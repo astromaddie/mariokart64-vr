@@ -1,4 +1,5 @@
 #include "patches.h"
+#include "vr_render.h"
 
 f32 func_802AAB4C(Player*);
 
@@ -463,23 +464,29 @@ RECOMP_PATCH void render_player_one_1p_screen(void) {
     // recomp_printf("CAMERA LOOKAT Y: %f\n", camera->pos[1]);
     // recomp_printf("CAMERA LOOKAT Z: %f\n\n", camera->pos[2]);
 
+    const int vr_world = mk64_vr_world();
+    if (vr_world) func_802A53A4();
     bool bigJump = !should_interpolate_perspective(camera->pos, camera->lookAt, 0);
 
     if (bigJump) {
         // Skip interpolation for this frame.
-        gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAA, G_EX_NOPUSH, G_MTX_PROJECTION,
-            G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+        gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAA, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_SKIP,
+                             G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
+                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         recomp_printf("CAMERA 1 SKIPED: %d\n", bigJump);
         gCamera1Skipped = true;
     } else {
         // Simple interpolation works much better for cameras because they orbit around a focus.
-        gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAA, G_EX_NOPUSH, G_MTX_PROJECTION,
-            G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+        gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAA, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_INTERPOLATE,
+                             G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE,
+                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP,
+                             G_EX_COMPONENT_SKIP);
         gCamera1Skipped = false;
     }
 
-    func_802A53A4();
+    if (!vr_world) func_802A53A4();
     init_rdp();
+    if (vr_world) mk64_vr_full_viewport();
     // func_802A3730(D_800DC5EC);
     gSPSetGeometryMode(gDisplayListHead++, G_ZBUFFER | G_SHADE | G_CULL_BACK | G_LIGHTING | G_SHADING_SMOOTH);
     gDPSetRenderMode(gDisplayListHead++, G_RM_AA_ZB_OPA_SURF, G_RM_AA_ZB_OPA_SURF2);
@@ -516,6 +523,9 @@ RECOMP_PATCH void render_player_one_1p_screen(void) {
     func_80021B0C();
     render_item_boxes(D_800DC5EC);
     render_player_snow_effect(RENDER_SCREEN_MODE_1P_PLAYER_ONE);
+    if (vr_world) gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAE1, G_EX_NOPUSH, G_MTX_PROJECTION,
+        G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP,
+        G_EX_COMPONENT_SKIP, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
     func_80058BF4();
     if (D_800DC5B8 != 0) {
         func_80058C20(RENDER_SCREEN_MODE_1P_PLAYER_ONE);
@@ -539,13 +549,14 @@ RECOMP_PATCH void render_player_one_2p_screen_vertical(void) {
     if (bigJump) {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAB, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_SKIP,
                              G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         recomp_printf("CAMERA 1 SKIPED: %d\n", bigJump);
         gCamera1Skipped = true;
     } else {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAB, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_INTERPOLATE,
                              G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP,
+                             G_EX_COMPONENT_SKIP);
         gCamera1Skipped = false;
     }
 
@@ -613,13 +624,14 @@ RECOMP_PATCH void render_player_two_2p_screen_vertical(void) {
     if (bigJump) {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAC, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_SKIP,
                              G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         recomp_printf("CAMERA 2 SKIPED: %d\n", bigJump);
         gCamera2Skipped = true;
     } else {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAC, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_INTERPOLATE,
                              G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP,
+                             G_EX_COMPONENT_SKIP);
         gCamera2Skipped = false;
     }
 
@@ -688,13 +700,14 @@ RECOMP_PATCH void render_player_one_2p_screen_horizontal(void) {
     if (bigJump) {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAD, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_SKIP,
                              G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         recomp_printf("CAMERA 1 SKIPED: %d\n", bigJump);
         gCamera1Skipped = true;
     } else {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAD, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_INTERPOLATE,
                              G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP,
+                             G_EX_COMPONENT_SKIP);
         gCamera1Skipped = false;
     }
 
@@ -769,13 +782,14 @@ RECOMP_PATCH void render_player_two_2p_screen_horizontal(void) {
     if (bigJump) {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAE, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_SKIP,
                              G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         recomp_printf("CAMERA 2 SKIPED: %d\n", bigJump);
         gCamera2Skipped = true;
     } else {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAE, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_INTERPOLATE,
                              G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP,
+                             G_EX_COMPONENT_SKIP);
         gCamera2Skipped = false;
     }
 
@@ -850,13 +864,14 @@ RECOMP_PATCH void render_player_one_3p_4p_screen(void) {
     if (bigJump) {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAF, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_SKIP,
                              G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         recomp_printf("CAMERA 1 SKIPED: %d\n", bigJump);
         gCamera1Skipped = true;
     } else {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAAF, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_INTERPOLATE,
                              G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP,
+                             G_EX_COMPONENT_SKIP);
         gCamera1Skipped = false;
     }
 
@@ -927,13 +942,14 @@ RECOMP_PATCH void render_player_two_3p_4p_screen(void) {
     if (bigJump) {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAB0, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_SKIP,
                              G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         recomp_printf("CAMERA 2 SKIPED: %d\n", bigJump);
         gCamera2Skipped = true;
     } else {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAB0, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_INTERPOLATE,
                              G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP,
+                             G_EX_COMPONENT_SKIP);
         gCamera2Skipped = false;
     }
 
@@ -1000,13 +1016,14 @@ RECOMP_PATCH void render_player_three_3p_4p_screen(void) {
     if (bigJump) {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAB1, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_SKIP,
                              G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         recomp_printf("CAMERA 3 SKIPED: %d\n", bigJump);
         gCamera3Skipped = true;
     } else {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAB1, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_INTERPOLATE,
                              G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP,
+                             G_EX_COMPONENT_SKIP);
         gCamera3Skipped = false;
     }
 
@@ -1072,13 +1089,14 @@ RECOMP_PATCH void render_player_four_3p_4p_screen(void) {
     if (bigJump) {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAB2, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_SKIP,
                              G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         recomp_printf("CAMERA 4 SKIPED: %d\n", bigJump);
         gCamera4Skipped = true;
     } else {
         gEXMatrixGroupSimple(gDisplayListHead++, 0xFFFFAAB2, G_EX_NOPUSH, G_MTX_PROJECTION, G_EX_COMPONENT_INTERPOLATE,
                              G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE,
-                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE);
+                             G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_LINEAR, G_EX_EDIT_NONE, G_EX_COMPONENT_SKIP,
+                             G_EX_COMPONENT_SKIP);
         gCamera4Skipped = false;
     }
 

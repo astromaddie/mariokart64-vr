@@ -1,4 +1,5 @@
 #include "patches.h"
+#include "vr_render.h"
 
 // Background Extended for Widescreen
 #if 1
@@ -7,6 +8,7 @@ Mtx D_0D008E98;
 
 RECOMP_PATCH void func_802A4A0C(Vtx* vtx, struct UnkStruct_800DC5EC* arg1, UNUSED s32 arg2, UNUSED s32 arg3,
                                 UNUSED f32* arg4) {
+    if (mk64_vr_world()) { mk64_vr_sky(vtx, arg1->camera); return; }
     float aspect = recomp_get_aspect_ratio(0.0f);
     u32 margin = 0;
 
@@ -115,3 +117,22 @@ RECOMP_PATCH void func_800788F8(s32 objectIndex, u16 rot, Camera* camera) {
 }
 #endif
 
+
+RECOMP_PATCH void func_802A487C(Vtx* arg0, UNUSED struct UnkStruct_800DC5EC* arg1, UNUSED s32 arg2, UNUSED s32 arg3,
+                   UNUSED f32* arg4) {
+
+    if (mk64_vr_world()) return;
+    init_rdp();
+    if (gCurrentCourseId != COURSE_RAINBOW_ROAD) {
+
+        gDPSetRenderMode(gDisplayListHead++, G_RM_OPA_SURF, G_RM_OPA_SURF2);
+        gSPClearGeometryMode(gDisplayListHead++, G_ZBUFFER | G_LIGHTING);
+        guOrtho(&gGfxPool->mtxScreen, 0.0f, SCREEN_WIDTH, 0.0f, SCREEN_HEIGHT, 0.0f, 5.0f, 1.0f);
+        gSPPerspNormalize(gDisplayListHead++, 0xFFFF);
+        gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(&gGfxPool->mtxScreen),
+                  G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_PROJECTION);
+        gSPMatrix(gDisplayListHead++, VIRTUAL_TO_PHYSICAL(&D_0D008E98), G_MTX_NOPUSH | G_MTX_LOAD | G_MTX_MODELVIEW);
+        gSPVertex(gDisplayListHead++, &arg0[4], 4, 0);
+        gSP2Triangles(gDisplayListHead++, 0, 3, 1, 0, 1, 3, 2, 0);
+    }
+}
