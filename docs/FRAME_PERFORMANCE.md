@@ -1,9 +1,11 @@
 # Steam Frame performance measurements
 
 2160×2160 per eye at an actual 120 Hz passed three native 90-second runs with the
-Amped Up 3D racers enabled. The selected Frame profile uses that resolution and
-rate, with foveation off. This is unattended Luigi Raceway evidence; wider course,
-effect, sustained thermal and wearer acceptance remain pending.
+Amped Up 3D racers enabled. These runs used camera smoothing off. The selected Frame
+profile uses that resolution and rate, with foveation off; the subsequent camera
+smoothing activation is described in [VR architecture](VR_ARCHITECTURE.md#camera-and-simulation).
+This is unattended Luigi Raceway evidence; wider course, effect, sustained thermal
+and wearer acceptance remain pending.
 
 Measured on the native AArch64 Frame build on 2026-10-08, through the Steam title
 `Devkit Game: MarioKart64VR` (shortcut app ID `2690512207`). The executable SHA256 is
@@ -41,8 +43,9 @@ original AI racers advance. Both submitted 2160×2160 eye images and the separat
 
 The normal shortcut uses `./LAUNCH-STEAM-FRAME.sh --game mk64`, with only
 `APP_FOLDER_PATH` in its saved environment. Diagnostic autostart, forced unworn
-rendering, dumps and automatic exit are disabled. Only `refresh_rate = 120` and
-`resolution_scale = "auto"` changed in the saved game configuration.
+rendering, dumps and automatic exit are disabled. During this performance check,
+only `refresh_rate = 120` and `resolution_scale = "auto"` changed in the saved game
+configuration. The later camera check selects `camera_smoothing = "low"` separately.
 
 Local full logs, launchers, image hashes, comparisons and the final device state
 are retained under ignored `build-linux-vr-validation/performance/`, with one
@@ -51,6 +54,25 @@ directory for each run and `summary.json`. Native log SHA256 values are:
 - Run 1: `05cefebf07dbb795a1cb99118f1bab3f994a7b1450b3e37cfbd3cf17cdc26440`
 - Run 2: `fbdb162148c7344aca8fd4df74fc5e76ab3a38ca9117eb93119ba7f41f13679a`
 - Run 3: `7115a1ad928cbd1b92f38d5b441c99cc8901f72d7ad62a52fe1fe38e78a06c00`
+
+## Camera smoothing enabled
+
+An additional native 90-second run used the saved `camera_smoothing = "low"` on
+the same binary and Amped Up mod. All four settled 10-second stereo windows
+reported 120.0 presentations/s, zero missed predicted periods and 3.09–3.10 ms
+GPU time for both eyes. The first stereo transition/readback window reported
+119.7 presentations/s and two misses. All 68 common simulation samples matched
+the stock baseline; the process exited cleanly. Submitted eye and HUD images were
+inspected. This stationary-player run does not measure driving-camera motion or
+wearer comfort.
+
+Local evidence is retained under ignored
+`build-linux-vr-validation/camera-smoothing-low/`; the native log SHA256 is
+`96ebb51919cca30cd4485f254d45bca695c7942e732eac035afb944e56ae0dea`.
+`normal-launch-verification.json` records the actual normal Steam process resolving
+the VR data folder after the launcher fallback correction, without diagnostic
+environment overrides. The saved configuration retains 120 Hz, automatic resolution
+and smoothing `low`, with diagnostic flags disabled.
 
 ## Live per-title refresh selection
 

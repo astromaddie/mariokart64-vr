@@ -16,6 +16,7 @@ case "$out" in
 esac
 test -x "$binary" || { echo "build executable not found: $binary" >&2; exit 1; }
 test -s "$metadata" || { echo "host source metadata is missing: $metadata" >&2; exit 1; }
+test -s "$build/CMakeCache.txt" || { echo "build configuration is missing: $build/CMakeCache.txt" >&2; exit 1; }
 
 rm -rf -- "$out"
 mkdir -p "$out/lib"
@@ -23,6 +24,9 @@ cp "$binary" "$out/MarioKart64Recompiled"
 cp -R "$root/assets" "$out/assets"
 cp "$root/recompcontrollerdb.txt" "$root/COPYING" "$out/"
 cp "$root/tools/steam_frame/LAUNCH-STEAM-FRAME.sh" "$out/LAUNCH-STEAM-FRAME.sh"
+if grep -q '^MK64_VR:BOOL=ON$' "$build/CMakeCache.txt"; then
+	printf '%s\n' MK64FrameVR > "$out/APP-DATA-NAME"
+fi
 chmod +x "$out/MarioKart64Recompiled" "$out/LAUNCH-STEAM-FRAME.sh"
 strip --strip-unneeded "$out/MarioKart64Recompiled"
 

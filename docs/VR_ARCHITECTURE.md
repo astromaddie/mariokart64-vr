@@ -51,6 +51,36 @@ Standby pauses at the publication boundary outside game locks, unless the explic
 The original letterboxed race intro stays in cinema until the native race clock advances;
 both the scene classifier and render-only patches use that same boundary.
 
+The installed Frame profile enables `camera_smoothing = "low"`. The existing
+`CameraSmoother` uses the Star Fox-style uniform quadratic B-spline over three
+source frames, evaluated at each display frame's interpolation weight. This smooths
+the game camera's position and orientation with about half a game frame of additional
+delay (16.7 ms at Mario Kart's 30 Hz). One rigid correction is shared by both eyes and
+the world/sky camera groups. The predicted OpenXR head pose is applied separately;
+physical head movement is not filtered. Scene changes and large camera jumps reset
+the history, and cinema/first-person views bypass the filter.
+
+The renderer already contained this code in package `dbcd585e…7850ca2`; the first
+baseline and the three initial 2160/120 measurements deliberately used `off`, which
+retains RT64's linear interpolation. Enabling `low` requires only the saved setting,
+without recompiling the application. `medium` and `high` add orientation followers
+of 0.06 s and 0.12 s; those extra filters are not selected. Star Fox's base cockpit
+smoother has no such follower and runs at 20 Hz, adding about 25 ms instead.
+
+A native 90-second run with saved `low` passed at 2160×2160 per eye and 120 Hz:
+four settled 10-second stereo windows had zero missed predicted display periods,
+and all 68 common simulation samples matched the stock flat baseline. Submitted
+eye/HUD images were inspected. The player was stationary while AI racers advanced;
+this verifies activation and rendering, with driving feel and wearer comfort pending.
+Full local evidence is in ignored `build-linux-vr-validation/camera-smoothing-low/`.
+
+The normal Steam launcher also resolves its data folder from the package's
+`APP-DATA-NAME` file when Steam omits the devkit environment sidecar. VR packages
+specify `MK64FrameVR`; explicit `APP_FOLDER_PATH` overrides retain precedence.
+The actual normal native process was verified using this folder with saved `low`
+and no diagnostic environment overrides. This launcher correction leaves the
+application binary unchanged.
+
 ## Draw and viewport inventory
 
 This inventory traces the shared production paths. It is not exhaustive certification of
