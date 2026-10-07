@@ -133,13 +133,15 @@ add_custom_command(OUTPUT ${CMAKE_SOURCE_DIR}/RecompiledPatches/patches_bin.c
 )
 
 # Recompile patches elf into patches.c and patches.bin
+set(N64_RECOMP_EXECUTABLE "${CMAKE_SOURCE_DIR}/N64Recomp" CACHE FILEPATH
+    "Path to the N64Recomp executable used to recompile patches")
 add_custom_command(OUTPUT
                        ${CMAKE_SOURCE_DIR}/patches/patches.bin
                        ${CMAKE_SOURCE_DIR}/RecompiledPatches/patches.c
                        ${CMAKE_SOURCE_DIR}/RecompiledPatches/recomp_overlays.inl
                        ${CMAKE_SOURCE_DIR}/RecompiledPatches/funcs.h
                    # TODO: Look into why modifying patches requires two builds to take
-                   COMMAND ./N64Recomp patches.toml
+                   COMMAND ${N64_RECOMP_EXECUTABLE} patches.toml
                    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
                    DEPENDS ${CMAKE_SOURCE_DIR}/patches/patches.elf
 )

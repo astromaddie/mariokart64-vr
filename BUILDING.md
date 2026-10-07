@@ -64,3 +64,28 @@ cmake --build build-cmake --target MarioKart64Recompiled -j$(nproc) --config Rel
 ## 5. Success
 
 Voilà! You should now have a `MarioKart64Recompiled` executable in the build directory! If you used Visual Studio this will be `out/build/x64-[Configuration]` and if you used the provided CMake commands then this will be `build-cmake`. You will need to run the executable out of the root folder of this project or copy the assets folder to the build folder to run it.
+
+## Steam Frame Linux ARM64 build
+
+The Frame uses a native ARM64 Linux binary. On an Apple Silicon Mac with Docker, provide your
+own US ROM and run:
+
+```bash
+MK64_ROM="/path/to/Mario Kart 64 (USA).z64" tools/docker/build-linux.sh all
+```
+
+The first run builds an Ubuntu 22.04 ARM64 image. `all` builds N64Recomp and RSPRecomp, checks
+the ROM against the supported US image, generates the recompiled code, builds with Clang 15,
+stages the package, checks the ELF ABI and dependency closure, then runs a short Xvfb/lavapipe
+startup smoke. `JOBS` can limit build parallelism and `MK64_FRAME_IMAGE` selects another
+compatible ARM64 image. Use `tools/docker/build-linux.sh image` to rebuild the default image.
+
+The package is written to `build-linux-aarch64/package/MarioKart64Recompiled/`. It includes the
+executable, assets, controller mappings, needed non-system shared libraries, launcher and
+`BUILD-METADATA.json`; it excludes the ROM, generated recompiler sources, saves and Vulkan
+drivers. The launcher stores settings, saves and the user's own ROM under
+`$XDG_DATA_HOME/MarioKart64Recompiled` (default `~/.local/share/MarioKart64Recompiled`). To
+skip the ROM picker, place the user's `mk64.us.z64` in that data directory. Launch through the
+Steam library on the Frame so SteamVR can supply controllers. Metadata records complete source
+and ROM provenance; `release_ready` remains false until the Frame launch and VR checks are done.
+Host smoke results do not replace Frame execution or headset acceptance.

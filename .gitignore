@@ -14,7 +14,13 @@ RecompiledPatches/
 
 # Linux build output
 build/
+build-linux-*/
+tools/vr_probe/mk64-frame-probe
 *.o
+
+# Python build helpers
+__pycache__/
+*.pyc
 
 # Windows build output
 *.exe
