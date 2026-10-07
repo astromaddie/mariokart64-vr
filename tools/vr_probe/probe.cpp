@@ -11,6 +11,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -49,6 +51,10 @@ struct Eye {
     std::vector<XrSwapchainImageVulkan2KHR> images;
     std::vector<VkImageView> views;
     std::vector<VkFramebuffer> framebuffers;
+    VkBuffer readbackBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory readbackMemory = VK_NULL_HANDLE;
+    VkDeviceSize readbackSize = 0;
+    bool readbackCoherent = false;
 };
 
 struct App {
@@ -73,6 +79,11 @@ struct App {
     bool sessionRunning = false;
     bool sessionBegun = false;
     uint64_t submittedFrames = 0;
+    bool readbackComplete = false;
+};
+
+struct ReadbackFiles {
+    std::filesystem::path directory;
 };
 
 bool init_vulkan(App &a) {
@@ -178,10 +189,11 @@ bool init_vulkan(App &a) {
     return true;
 }
 
-bool create_eye(App &a, Eye &eye, uint32_t width, uint32_t height) {
+bool create_eye(App &a, Eye &eye, uint32_t width, uint32_t height, bool needReadback) {
     eye.width = width; eye.height = height;
     XrSwapchainCreateInfo sci{XR_TYPE_SWAPCHAIN_CREATE_INFO};
-    sci.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT;
+    sci.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_MUTABLE_FORMAT_BIT |
+        (needReadback ? XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT : 0);
     sci.format = VK_FORMAT_R8G8B8A8_SRGB;
     sci.sampleCount = 1; sci.width = width; sci.height = height;
     sci.faceCount = sci.arraySize = sci.mipCount = 1;
@@ -211,19 +223,54 @@ bool create_eye(App &a, Eye &eye, uint32_t width, uint32_t height) {
         if (!vk_ok(vkCreateFramebuffer(a.device, &fbci, nullptr, &framebuffer), "vkCreateFramebuffer UNORM")) return false;
         eye.framebuffers.push_back(framebuffer);
     }
+    if (needReadback) {
+        eye.readbackSize = VkDeviceSize(width) * height * 4;
+        VkBufferCreateInfo bci{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+        bci.size = eye.readbackSize;
+        bci.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        if (!vk_ok(vkCreateBuffer(a.device, &bci, nullptr, &eye.readbackBuffer), "vkCreateBuffer readback")) return false;
+        VkMemoryRequirements requirements{};
+        vkGetBufferMemoryRequirements(a.device, eye.readbackBuffer, &requirements);
+        VkPhysicalDeviceMemoryProperties memoryProperties{};
+        vkGetPhysicalDeviceMemoryProperties(a.physical, &memoryProperties);
+        uint32_t memoryType = UINT32_MAX;
+        int bestScore = -1;
+        for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i) {
+            if ((requirements.memoryTypeBits & (1u << i)) == 0) continue;
+            const VkMemoryPropertyFlags flags = memoryProperties.memoryTypes[i].propertyFlags;
+            if ((flags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == 0) continue;
+            const int score = ((flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) ? 2 : 0) + ((flags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) ? 1 : 0);
+            if (score > bestScore) { memoryType = i; bestScore = score; }
+        }
+        if (memoryType == UINT32_MAX) { std::fprintf(stderr, "FAIL no host-visible memory type for readback\n"); return false; }
+        const VkMemoryPropertyFlags memoryFlags = memoryProperties.memoryTypes[memoryType].propertyFlags;
+        eye.readbackCoherent = (memoryFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
+        VkMemoryAllocateInfo mai{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+        mai.allocationSize = requirements.size;
+        mai.memoryTypeIndex = memoryType;
+        if (!vk_ok(vkAllocateMemory(a.device, &mai, nullptr, &eye.readbackMemory), "vkAllocateMemory readback") ||
+            !vk_ok(vkBindBufferMemory(a.device, eye.readbackBuffer, eye.readbackMemory, 0), "vkBindBufferMemory readback")) return false;
+    }
     return true;
 }
 
-bool render_eye(App &a, Eye &eye, const std::array<float, 4> &color) {
+bool render_eye(App &a, Eye &eye, const std::array<float, 4> &color, bool capture, std::vector<uint8_t> &pixels) {
     XrSwapchainImageAcquireInfo ai{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
     uint32_t index = 0;
     if (!xr_ok(xrAcquireSwapchainImage(eye.swapchain, &ai, &index), "xrAcquireSwapchainImage")) return false;
     XrSwapchainImageWaitInfo wi{XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO}; wi.timeout = XR_INFINITE_DURATION;
     if (!xr_ok(xrWaitSwapchainImage(eye.swapchain, &wi), "xrWaitSwapchainImage")) return false;
+    auto failAfterWait = [&]() {
+        (void)vkDeviceWaitIdle(a.device);
+        XrSwapchainImageReleaseInfo release{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
+        (void)xrReleaseSwapchainImage(eye.swapchain, &release);
+        return false;
+    };
 
-    if (!vk_ok(vkResetCommandBuffer(a.command, 0), "vkResetCommandBuffer")) return false;
+    if (!vk_ok(vkResetCommandBuffer(a.command, 0), "vkResetCommandBuffer")) return failAfterWait();
     VkCommandBufferBeginInfo bi{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    if (!vk_ok(vkBeginCommandBuffer(a.command, &bi), "vkBeginCommandBuffer")) return false;
+    if (!vk_ok(vkBeginCommandBuffer(a.command, &bi), "vkBeginCommandBuffer")) return failAfterWait();
     VkClearValue clear{};
     std::copy(color.begin(), color.end(), clear.color.float32);
     VkRenderPassBeginInfo rbi{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
@@ -234,10 +281,62 @@ bool render_eye(App &a, Eye &eye, const std::array<float, 4> &color) {
     rbi.pClearValues = &clear;
     vkCmdBeginRenderPass(a.command, &rbi, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdEndRenderPass(a.command);
-    if (!vk_ok(vkEndCommandBuffer(a.command), "vkEndCommandBuffer")) return false;
-    if (!vk_ok(vkResetFences(a.device, 1, &a.fence), "vkResetFences")) return false;
+    if (capture) {
+        VkImageMemoryBarrier toTransfer{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        toTransfer.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        toTransfer.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        toTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        toTransfer.image = eye.images[index].image;
+        toTransfer.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        vkCmdPipelineBarrier(a.command, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toTransfer);
+        VkBufferImageCopy copy{};
+        copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        copy.imageExtent = {eye.width, eye.height, 1};
+        vkCmdCopyImageToBuffer(a.command, eye.images[index].image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, eye.readbackBuffer, 1, &copy);
+        VkBufferMemoryBarrier toHost{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
+        toHost.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        toHost.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+        toHost.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        toHost.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        toHost.buffer = eye.readbackBuffer;
+        toHost.offset = 0;
+        toHost.size = eye.readbackSize;
+        vkCmdPipelineBarrier(a.command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 0, nullptr, 1, &toHost, 0, nullptr);
+        VkImageMemoryBarrier toRuntime{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+        toRuntime.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        toRuntime.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        toRuntime.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        toRuntime.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        toRuntime.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        toRuntime.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        toRuntime.image = eye.images[index].image;
+        toRuntime.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+        vkCmdPipelineBarrier(a.command, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &toRuntime);
+    }
+    if (!vk_ok(vkEndCommandBuffer(a.command), "vkEndCommandBuffer")) return failAfterWait();
+    if (!vk_ok(vkResetFences(a.device, 1, &a.fence), "vkResetFences")) return failAfterWait();
     VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO}; submit.commandBufferCount = 1; submit.pCommandBuffers = &a.command;
-    if (!vk_ok(vkQueueSubmit(a.queue, 1, &submit, a.fence), "vkQueueSubmit") || !vk_ok(vkWaitForFences(a.device, 1, &a.fence, VK_TRUE, UINT64_MAX), "vkWaitForFences")) return false;
+    if (!vk_ok(vkQueueSubmit(a.queue, 1, &submit, a.fence), "vkQueueSubmit") || !vk_ok(vkWaitForFences(a.device, 1, &a.fence, VK_TRUE, UINT64_MAX), "vkWaitForFences")) return failAfterWait();
+    if (capture) {
+        void *mapped = nullptr;
+        if (!vk_ok(vkMapMemory(a.device, eye.readbackMemory, 0, VK_WHOLE_SIZE, 0, &mapped), "vkMapMemory readback")) return failAfterWait();
+        if (!eye.readbackCoherent) {
+            VkMappedMemoryRange range{VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE};
+            range.memory = eye.readbackMemory;
+            range.offset = 0;
+            range.size = VK_WHOLE_SIZE;
+            if (!vk_ok(vkInvalidateMappedMemoryRanges(a.device, 1, &range), "vkInvalidateMappedMemoryRanges")) {
+                vkUnmapMemory(a.device, eye.readbackMemory);
+                return failAfterWait();
+            }
+        }
+        pixels.resize(size_t(eye.readbackSize));
+        std::memcpy(pixels.data(), mapped, pixels.size());
+        vkUnmapMemory(a.device, eye.readbackMemory);
+    }
     XrSwapchainImageReleaseInfo ri{XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO};
     return xr_ok(xrReleaseSwapchainImage(eye.swapchain, &ri), "xrReleaseSwapchainImage");
 }
@@ -247,6 +346,8 @@ void destroy(App &a) {
     for (Eye &e : a.eyes) {
         for (VkFramebuffer framebuffer : e.framebuffers) vkDestroyFramebuffer(a.device, framebuffer, nullptr);
         for (VkImageView view : e.views) vkDestroyImageView(a.device, view, nullptr);
+        if (e.readbackBuffer) vkDestroyBuffer(a.device, e.readbackBuffer, nullptr);
+        if (e.readbackMemory) vkFreeMemory(a.device, e.readbackMemory, nullptr);
         if (e.swapchain) xrDestroySwapchain(e.swapchain);
     }
     if (a.local) xrDestroySpace(a.local);
@@ -261,7 +362,43 @@ void destroy(App &a) {
     if (a.instance) xrDestroyInstance(a.instance);
 }
 
-bool run(double seconds) {
+bool save_and_verify_readback(const std::filesystem::path &directory, const char *eyeName, const Eye &eye,
+                              const std::vector<uint8_t> &rgba, const std::array<uint8_t, 4> &expected) {
+    if (rgba.size() != size_t(eye.width) * eye.height * 4) {
+        std::fprintf(stderr, "FAIL %s readback byte count: got %zu, expected %llu\n", eyeName, rgba.size(),
+            static_cast<unsigned long long>(VkDeviceSize(eye.width) * eye.height * 4));
+        return false;
+    }
+    const auto rawPath = directory / (std::string(eyeName) + ".rgba");
+    const auto ppmPath = directory / (std::string(eyeName) + ".ppm");
+    {
+        std::ofstream raw(rawPath, std::ios::binary);
+        if (!raw || !raw.write(reinterpret_cast<const char *>(rgba.data()), std::streamsize(rgba.size()))) {
+            std::fprintf(stderr, "FAIL writing %s\n", rawPath.c_str()); return false;
+        }
+    }
+    {
+        std::ofstream ppm(ppmPath, std::ios::binary);
+        if (!ppm) { std::fprintf(stderr, "FAIL opening %s\n", ppmPath.c_str()); return false; }
+        ppm << "P6\n" << eye.width << " " << eye.height << "\n255\n";
+        for (size_t i = 0; i < rgba.size(); i += 4) ppm.write(reinterpret_cast<const char *>(rgba.data() + i), 3);
+        if (!ppm) { std::fprintf(stderr, "FAIL writing %s\n", ppmPath.c_str()); return false; }
+    }
+    bool matches = true;
+    for (size_t i = 0; i < rgba.size(); i += 4) {
+        for (size_t channel = 0; channel < 4; ++channel) {
+            if (std::abs(int(rgba[i + channel]) - int(expected[channel])) > 1) matches = false;
+        }
+    }
+    const size_t center = (size_t(eye.height / 2) * eye.width + eye.width / 2) * 4;
+    std::printf("Readback %s %ux%u center RGBA=%u,%u,%u,%u expected=%u,%u,%u,%u uniform=%s files=%s,%s\n",
+        eyeName, eye.width, eye.height, rgba[center], rgba[center + 1], rgba[center + 2], rgba[center + 3],
+        expected[0], expected[1], expected[2], expected[3], matches ? "yes" : "no", rawPath.c_str(), ppmPath.c_str());
+    if (!matches) std::fprintf(stderr, "FAIL %s readback did not match the expected clear across every pixel\n", eyeName);
+    return matches;
+}
+
+bool run(double seconds, const ReadbackFiles *readbackFiles) {
     App a;
     uint32_t extCount = 0;
     if (!xr_ok(xrEnumerateInstanceExtensionProperties(nullptr, 0, &extCount, nullptr), "enumerate runtime extensions")) return false;
@@ -316,7 +453,7 @@ bool run(double seconds) {
 
     const auto start = Clock::now();
     bool failed = false;
-    while (std::chrono::duration<double>(Clock::now() - start).count() < seconds && !failed) {
+    while (std::chrono::duration<double>(Clock::now() - start).count() < seconds && !failed && !a.readbackComplete) {
         XrEventDataBuffer event{XR_TYPE_EVENT_DATA_BUFFER};
         while (xrPollEvent(a.instance, &event) == XR_SUCCESS) {
             if (event.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED) {
@@ -334,7 +471,7 @@ bool run(double seconds) {
                     XrSessionBeginInfo begin{XR_TYPE_SESSION_BEGIN_INFO}; begin.primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
                     failed = !xr_ok(xrBeginSession(a.session, &begin), "xrBeginSession");
                     a.sessionBegun = !failed; a.sessionRunning = a.sessionBegun;
-                    if (a.sessionRunning) for (int i = 0; i < 2 && !failed; ++i) failed = !create_eye(a, a.eyes[i], viewConfigs[i].recommendedImageRectWidth, viewConfigs[i].recommendedImageRectHeight);
+                    if (a.sessionRunning) for (int i = 0; i < 2 && !failed; ++i) failed = !create_eye(a, a.eyes[i], viewConfigs[i].recommendedImageRectWidth, viewConfigs[i].recommendedImageRectHeight, readbackFiles != nullptr);
                 } else if (changed->state == XR_SESSION_STATE_STOPPING && a.sessionBegun) {
                     failed = !xr_ok(xrEndSession(a.session), "xrEndSession"); a.sessionBegun = false; a.sessionRunning = false;
                 } else if (changed->state == XR_SESSION_STATE_EXITING || changed->state == XR_SESSION_STATE_LOSS_PENDING) {
@@ -352,6 +489,8 @@ bool run(double seconds) {
             XrCompositionLayerProjectionView{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW},
             XrCompositionLayerProjectionView{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW}};
         bool render = fs.shouldRender;
+        const bool capture = render && readbackFiles != nullptr && !a.readbackComplete;
+        std::array<std::vector<uint8_t>, 2> capturedPixels;
         if (render) {
             XrViewLocateInfo locate{XR_TYPE_VIEW_LOCATE_INFO}; locate.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
             locate.displayTime = fs.predictedDisplayTime; locate.space = a.local;
@@ -364,7 +503,7 @@ bool run(double seconds) {
             }
             for (uint32_t i = 0; i < 2 && !failed; ++i) {
                 const std::array<float, 4> colors = {i == 0 ? 0.90f : 0.05f, i == 0 ? 0.05f : 0.15f, i == 0 ? 0.10f : 0.90f, 1.0f};
-                if (!render_eye(a, a.eyes[i], colors)) { failed = true; break; }
+                if (!render_eye(a, a.eyes[i], colors, capture, capturedPixels[i])) { failed = true; break; }
                 projectionViews[i].pose = views[i].pose;
                 projectionViews[i].fov = views[i].fov;
                 projectionViews[i].subImage.swapchain = a.eyes[i].swapchain;
@@ -381,7 +520,17 @@ bool run(double seconds) {
         if (render && !failed) { end.layerCount = 1; end.layers = layers; }
         XrResult endResult = xrEndFrame(a.session, &end);
         if (!xr_ok(endResult, "xrEndFrame")) failed = true;
-        else if (render && !failed) ++a.submittedFrames;
+        else if (render && !failed) {
+            ++a.submittedFrames;
+            if (capture) {
+                const bool leftOk = save_and_verify_readback(readbackFiles->directory, "left", a.eyes[0], capturedPixels[0], {230, 13, 26, 255});
+                const bool rightOk = save_and_verify_readback(readbackFiles->directory, "right", a.eyes[1], capturedPixels[1], {13, 38, 230, 255});
+                if (leftOk && rightOk) {
+                    a.readbackComplete = true;
+                    std::puts("Readback validation: PASS (distinct left/right eye colors)");
+                } else failed = true;
+            }
+        }
     }
 
     // Leave a running session through the runtime's STOPPING -> xrEndSession sequence.
@@ -412,6 +561,10 @@ bool run(double seconds) {
         }
     }
     std::printf("Submitted valid stereo frames: %llu\n", static_cast<unsigned long long>(a.submittedFrames));
+    if (readbackFiles && !a.readbackComplete) {
+        std::fprintf(stderr, "FAIL readback mode ended without a captured and validated submitted frame\n");
+        failed = true;
+    }
     destroy(a);
     return !failed && a.submittedFrames > 0;
 }
@@ -419,12 +572,29 @@ bool run(double seconds) {
 
 int main(int argc, char **argv) {
     double seconds = 30.0;
-    if (argc == 3 && std::strcmp(argv[1], "--seconds") == 0) {
-        char *end = nullptr; seconds = std::strtod(argv[2], &end);
-        if (!end || *end || !std::isfinite(seconds) || seconds < 0.1 || seconds > 3600) {
-            std::fprintf(stderr, "usage: %s [--seconds 0.1..3600]\n", argv[0]); return 2;
+    ReadbackFiles readback;
+    bool readbackRequested = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--seconds") == 0 && i + 1 < argc) {
+            char *end = nullptr; seconds = std::strtod(argv[++i], &end);
+            if (!end || *end || !std::isfinite(seconds) || seconds < 0.1 || seconds > 3600) {
+                std::fprintf(stderr, "usage: %s [--seconds 0.1..3600] [--readback-dir PATH]\n", argv[0]); return 2;
+            }
+        } else if (std::strcmp(argv[i], "--readback-dir") == 0 && i + 1 < argc) {
+            readback.directory = argv[++i];
+            readbackRequested = true;
+        } else {
+            std::fprintf(stderr, "usage: %s [--seconds 0.1..3600] [--readback-dir PATH]\n", argv[0]); return 2;
         }
-    } else if (argc != 1) { std::fprintf(stderr, "usage: %s [--seconds 0.1..3600]\n", argv[0]); return 2; }
-    if (!run(seconds)) { std::fprintf(stderr, "PROBE FAILED: no valid rendered stereo frames\n"); return 1; }
+    }
+    if (readbackRequested) {
+        std::error_code ec;
+        std::filesystem::create_directories(readback.directory, ec);
+            if (ec || !std::filesystem::is_directory(readback.directory, ec)) {
+            std::fprintf(stderr, "FAIL creating readback directory %s: %s\n", readback.directory.c_str(), ec.message().c_str());
+            return 2;
+        }
+    }
+    if (!run(seconds, readbackRequested ? &readback : nullptr)) { std::fprintf(stderr, "PROBE FAILED: no valid rendered stereo frames\n"); return 1; }
     std::puts("PROBE PASSED"); return 0;
 }

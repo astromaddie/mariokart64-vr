@@ -16,9 +16,12 @@ The pinned-source ARM64 build, package and dependency checks pass. A 30-second X
 smoke run loaded the application UI assets and stayed open until its timeout. The package's
 `BUILD-METADATA.json` and `build-linux-aarch64/logs` record that host evidence. The smoke image
 has no D-Bus session bus, so SDL prints a D-Bus assertion during timeout shutdown. A separate
-native probe created a SteamVR/OpenXR session and submitted one stereo frame. The game itself
-has not launched on the Frame, and the probe's eye colors have not been visually checked because
-the device was unworn. These results do not establish game VR readiness.
+native probe created a SteamVR/OpenXR session and submitted one stereo frame. A second probe
+run read back those submitted images and verified distinct uniform left/right colors on the
+Frame GPU. The flat game launches through Steam and its launcher has been captured through
+Gamescope. Entry into gameplay and simulation-rate measurements remain pending. The user
+explicitly authorized proceeding with controllers assumed to work; controller playtesting
+remains unverified. These results do not establish game VR readiness.
 
 ## Camera and simulation
 
@@ -57,7 +60,8 @@ path in this source state.
 
 The game input callback polls the existing SDL/game-controller mapping path and feeds the
 runtime's N64 pad state. The Steam Frame profile and how SteamVR exposes that controller to SDL
-must be checked through a Steam launch on the device.
+remain pending a controller playtest. The user authorized assuming controller operation while
+implementation proceeds.
 
 ## Frame protocol and probe gate
 
@@ -67,9 +71,10 @@ eye first, then submit one projection layer. The graphics binding and swapchain 
 measured by the standalone Vulkan OpenXR colour probe: SteamVR/OpenXR 2.17.10 accepted two
 1728×1728 sRGB swapchains with UNORM views on a Turnip Adreno 750 GPU.
 
-The probe submitted one valid stereo frame while the device was in `SYNCHRONIZED`. Visual
-confirmation of distinct left/right colors is still pending. The probe does not render game
-content and is not evidence of stereo gameplay.
+The readback probe submitted one valid stereo frame and verified every pixel of the left
+image as RGBA `230,13,26,255` and the right image as `13,38,230,255`. It copied the same
+acquired images that were released and submitted, after rendering through UNORM views. The
+device was unworn. The probe does not render game content and is not evidence of stereo gameplay.
 
 ## Status
 
@@ -77,8 +82,8 @@ content and is not evidence of stereo gameplay.
 | --- | --- | --- |
 | Linux AArch64 flat build, package and ABI | Passed on host | ARM64 ELF, staged dependency closure and package metadata; `GLIBC_2.34` maximum, no `GLIBCXX` requirement |
 | Xvfb/lavapipe launch smoke | Passed for 30 seconds | UI assets loaded; process remained alive until timeout; D-Bus assertion occurs at shutdown in the bus-less container |
-| Steam Frame install and flat launch | Not started | Device execution is pending |
-| Flat Steam launch and persistent data | Not started | Requires Frame connection and a Steam devkit title |
-| Standalone Vulkan OpenXR colour probe | Submitted one stereo frame | SteamVR/OpenXR 2.17.10, Turnip Adreno 750, two 1728×1728 sRGB swapchains with UNORM views; device was in `SYNCHRONIZED` and unworn, so visual eye-color confirmation is pending |
+| Steam Frame install and flat launch | Launcher verified unattended | Native package installed as `MarioKart64FlatBaseline`; Gamescope capture shows the launcher; gameplay entry pending |
+| Flat Steam launch and persistent data | Configured; gameplay checks pending | ROM/configs outside the package in `~/.local/share/MK64FrameBaseline`; controller operation assumed at user request |
+| Standalone Vulkan OpenXR colour probe | GPU readback and submission passed | SteamVR/OpenXR 2.17.10, Turnip Adreno 750, two 1728×1728 sRGB swapchains with UNORM views; distinct uniform colors verified across the submitted images |
 | Stereo gameplay and HUD inventory | Not started | No VR render path |
 | User headset play | Not started | The game build has not been worn or visually checked |
