@@ -28,6 +28,9 @@ production frames 630–1140 advanced 30/second while VI advanced 60/second, and
 AI state digest and audio counters advanced. The corrected native VR package `d770b106…a5a0743b`
 matched all 68 common simulation samples at game frames 630–2640, including native race clock
 and all eight players. Actual submitted eye/HUD images were inspected at yaw 0/90/180/270.
+The final clean-source package `dbcd585e…7850ca2` also passed a native 60-second stock run
+with the saved 0.05 m near plane: its 38 common simulation samples at frames 630–1740
+matched the same flat baseline, and its submitted eye image retained the corrected floor.
 The user authorized proceeding with controllers assumed to work; controller and wearer
 playtesting remain unverified. Only Luigi Raceway has unattended game-scene coverage.
 
@@ -132,9 +135,9 @@ device was unworn. The probe does not render game content and is not evidence of
 | Steam Frame install and flat launch | Attract racing verified unattended | Native original package `d6d40e9c…26d`; Gamescope capture shows Yoshi Valley split-screen attract race |
 | Modern flat race and rates | Verified unattended | Real 1P Luigi Raceway via scripted original menus;30 game frames and 60 VI per second; data outside the package |
 | Standalone Vulkan OpenXR colour probe | GPU readback and submission passed | SteamVR/OpenXR 2.17.10, Turnip Adreno 750, two 1728×1728 sRGB swapchains with UNORM views; distinct uniform colors verified across the submitted images |
-| Native VR build, package and ABI | Passed | Validated stock candidate `d770b106…a5a0743b`; GLIBC 2.35 maximum; actual native 1P eye/HUD submission |
+| Native VR build, package and ABI | Passed | Final clean-source package `dbcd585e…7850ca2`; GLIBC 2.35 maximum; actual native 1P eye/HUD submission |
 | Bridge/profile/retained-eye tests | Passed | Four host suites plus seven sfvr suites; production scene classifier, controller mapping and head-independent steering |
-| Stereo gameplay and simulation parity | Verified unattended | Corrected native 1P race submitted eyes/HUD and exited at 90s; all 68 common simulation samples match the modern flat run at frames 630–2640 |
+| Stereo gameplay and simulation parity | Verified unattended | Cardinal-view candidate matched all 68 common simulation samples at frames 630–2640; final package matched all 38 samples at 630–1740 and exited cleanly at 60s |
 | Viewport, HUD and full-course coverage | Luigi Raceway cardinal views and HUD inspected; broader coverage pending | Actual yaw 0/90/180/270 eye images and settled HUD; intro cinema transition confirmed; 0.05 m near-plane floor correction inspected separately |
 | User headset play | Not started | Unworn submitted GPU images inspected; controllers assumed by user request; wearer playtesting remains pending |
 
@@ -169,14 +172,20 @@ and jumbotron contents. Native AI/camera-collision and object-update visibility 
 unchanged; full 360-degree object coverage is not yet established. The model NRM has its own
 runtime gate and should remain disabled for the stock-renderer comparison.
 
-The validated stock VR snapshot is `build-linux-vr-intro2/package/MarioKart64Recompiled`
-(binary SHA256 `d770b10685a3593a0b1758074da630d83f8f9ca2a2c5a65a797d7634a5a0743b`).
-The matching OFF snapshot is `build-linux-flat-intro2/package/MarioKart64Recompiled`
+The final stock VR package is `build-linux-vr-release/package/MarioKart64Recompiled`
+(binary SHA256 `dbcd585ee9f890b136181378adadde7dd9e2fc3e690cc025be294bcb17850ca2`),
+built from clean source revision `dd3d7a191b606e8ef0830588a89e8bf8c60df562`.
+The matching OFF package is `build-linux-flat-release/package/MarioKart64Recompiled`
 (binary SHA256 `1f8e61198756bc25f0ffacaa9486e4b80e40a66d3d06d005a64f9dfd8c2e570f`).
-Each retains its matching unstripped executable above `package/`. The later near-plane run
-uses the VR snapshot with `MK64_VR_EYE_NEAR_M=0.05`, the new source default.
+Each retains its matching unstripped executable above `package/`. The earlier cardinal-view
+snapshot `d770b106…a5a0743b` is preserved in `build-linux-vr-intro2/`. Its separate near-plane
+run used `MK64_VR_EYE_NEAR_M=0.05`; the final source makes that value the VR default.
 Local evidence, logs and the comparison JSON are preserved under ignored
 `build-linux-vr-validation/stock/`; the comparison excludes presentation/camera fields.
+
+The Frame's Steam shortcut `Devkit Game: MarioKart64VR` uses the ordinary package launcher
+with `--game mk64` and app data at `~/.local/share/MK64FrameVR`. Diagnostic autostart,
+forced unworn rendering, image dumps and automatic exit are disabled in the normal shortcut.
 
 ## Render invariants and limitations
 
