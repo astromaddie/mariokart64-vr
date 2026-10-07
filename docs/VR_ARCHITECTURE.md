@@ -110,7 +110,9 @@ camera, source pitch, runtime eye separation and a 0.05 m VR near plane. The sou
 near plane becomes 0.9 m at this scale and visibly clips the floor at headset FOV; actual
 Frame eye captures confirmed that 0.05 m removes the strip. RT64 remaps fog from the source
 projection when changing the near plane. It is not a measured kart
-height. Resolution is the runtime recommendation and refresh request 72 Hz; foveation is off.
+height. The source profile requests the runtime recommendation and 72 Hz; foveation is off.
+The installed Frame title's higher-resolution 120 Hz measurements and per-title configuration
+are recorded in [Frame performance](FRAME_PERFORMANCE.md).
 World scale can be adjusted with `MK64_VR_WORLD_SCALE`. No physical dimensions are inferred
 from the Amped racer colour tables or collision radius.
 
@@ -140,6 +142,7 @@ device was unworn. The probe does not render game content and is not evidence of
 | Stereo gameplay and simulation parity | Verified unattended | Cardinal-view candidate matched all 68 common simulation samples at frames 630–2640; final package matched all 38 samples at 630–1740 and exited cleanly at 60s |
 | Viewport, HUD and full-course coverage | Luigi Raceway cardinal views and HUD inspected; broader coverage pending | Actual yaw 0/90/180/270 eye images and settled HUD; intro cinema transition confirmed; 0.05 m near-plane floor correction inspected separately |
 | Private Amped Up 3D racers | Built, installed and native rendering verified unattended | Final external NRM `4ba53056…2437a8`; 269 model lists validated, ten importer tests passed, submitted eyes/HUD inspected and 38 final simulation samples matched stock |
+| 2160×2160 per eye at 120 Hz | Verified unattended on Luigi Raceway | Three 90-second runs with the final model mod; actual 8.333 ms period, twelve settled windows at 120.0 presentations/s with zero missed periods, approximately 3.1 ms both-eye GPU; 68 simulation samples matched stock per run. See [performance details](FRAME_PERFORMANCE.md). |
 | User headset play | Not started | Unworn submitted GPU images inspected; controllers assumed by user request; wearer playtesting remains pending |
 
 ## Reproduction
