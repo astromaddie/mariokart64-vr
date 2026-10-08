@@ -362,3 +362,46 @@ static translation evidence, not a worn pass or completed lap. The live HUD capt
 shows complete timer cells; completed-lap timing still needs a race retest. The
 normal saved profile remains LOW smoothing, automatic 2160-square eyes, 120 Hz,
 0.05 m near plane and billboard facing enabled. All diagnostics are process-only.
+
+## First-person controls proposal
+
+The [interactive review sketch](mockups/mk64-first-person.html) proposes an optional
+seated racer-eye view, visible racer arms with elbow IK, a grip-operated steering
+wheel, and hand-held shells/bananas released by a throwing gesture. It includes
+both off-wheel grip acquisition and a side pickup variant. One hand can steer
+while the other holds an item; no wheel grips restores left-stick steering.
+Existing accelerator, brake, drift and item buttons remain available. Wheel
+steering uses the calibrated seat frame, so looking sideways does not steer.
+First-person grips reserve camera adjustment for the settings preview.
+
+This is a mockup awaiting controls/asset review, not an implemented or tested
+game feature. Its original SVG components illustrate interaction; the game
+should retain the standard Amped Up racer art. The mapped Mario/Wario armatures
+already contain mirrored upper-arm and child forearm/hand geometry (records
+7/9 and 13/15). Bilateral offsets and vertex bounds support that anatomical
+interpretation; the source records have no bone names. Their wrists lack a
+separate geometry node, so independent wrist rotation needs a mesh/rig adaptation.
+The remaining racers require the same per-character rig verification.
+
+Reusable prior art is F-Zero's vehicle seat anchor and Halo's
+`vr_drive_input` wheel mapping and `vr_solve_arm` two-bone solver. MK64 currently
+locates aim poses only; grip poses, right squeeze input, and release motion
+history must be added. Hand/head transforms and the wheel must share the same
+world-scale adapter and predicted presentation frame.
+
+Native item hooks are `use_green_shell_item`, `use_red_shell_item` and
+`use_banana_item` in `lib/mk64/src/racing/actors_extended.c`, plus the held/launch
+cases in `lib/mk64/src/actors/{green_shell,blue_and_red_shells,banana}/update.inc.c`.
+Single shells already use `HELD_SHELL`; bananas use `HELD_BANANA`. Hand attachment
+must replace their kart-relative held position and collision proxy. Release must
+preserve owner/type, native active states, timers and unexpired-shell registration;
+red-shell homing and subsequent terrain/collision updates stay native. Triple-shell
+orbit and banana-bunch states need separate handling. Gesture detection uses raw
+tracking motion, avoiding artificial hand speed from kart travel. Pause, focus
+loss, recentre and invalid tracking retain held items and disarm throws until a
+fresh grip. These integration points are source evidence, not runtime proof.
+
+Acceptance requires production-path rig/item checks, submitted stereo captures
+with synthetic grip poses, a new 2160-square/120 Hz measurement, and a worn race
+covering one-hand steering, throws, quiet releases and recovery. Current stationary
+performance evidence does not establish performance with these proposed features.
