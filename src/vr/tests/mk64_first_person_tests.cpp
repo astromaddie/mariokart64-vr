@@ -145,6 +145,23 @@ int main(){
         Vec3 point=transformPoint({},mul(model,view));
         assert(near(point.x,2,.01f) && near(point.y,-1,.01f) && near(point.z,-3,.01f));
     }
+    // Real volumetric prop path: hand orientation changes the mesh, its grasp
+    // anchor stays at the controller, and invalid samples retain both in seat axes.
+    for(int kind=0;kind<2;kind++) {
+        Vec3 grasp=kind?Vec3{0,27,0}:Vec3{};
+        attachment.update(true,1,true,{2,-1,-3},quatFromYaw(1.1f));
+        attachment.update(true,1,false,{},{});
+        Mat4 model=poseMatrix({{}, {}});
+        for(int axis=0;axis<3;axis++)model.m[axis][axis]=.1f;
+        Mat4 view=rigidInverse(poseMatrix({quatFromYaw(.7f),{10000,20,-20000}}));
+        assert(attachment.transform(model,view,true,grasp));
+        Mat4 local=mul(model,view);
+        Vec3 point=transformPoint(grasp,local);
+        assert(near(point.x,2,.01f)&&near(point.y,-1,.01f)&&near(point.z,-3,.01f));
+        Vec3 tip=transformPoint(Vec3{grasp.x,grasp.y,grasp.z+10},local);
+        assert(near(tip.x-point.x,std::sin(1.1f),.01f));
+        assert(near(tip.z-point.z,std::cos(1.1f),.01f));
+    }
     attachment.update(false,-1,false,{});
     Mat4 itemModel;assert(!attachment.transform(itemModel,Mat4{}));
     attachment.update(true,1,false,{});assert(!attachment.transform(itemModel,Mat4{}));

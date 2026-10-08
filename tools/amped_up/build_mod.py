@@ -182,6 +182,7 @@ def main() -> int:
     parser.add_argument("--docker-image", default="mariokart64recomp-frame:latest", help="local image with clang-15 and ld.lld-15")
     parser.add_argument("--output-nrm", type=Path, default=ROOT / "mods" / "amped_up.nrm",
                         help="private NRM destination; use a path outside root mods when building the application")
+    parser.add_argument("--kart-source", type=Path, help="private directory with all eight supplied COLLADA kart variants and PNGs")
     args = parser.parse_args()
 
     output_dir = ROOT / "build" / "amped_up"
@@ -193,6 +194,7 @@ def main() -> int:
             output_dir / "amped_up_custom_segment.bin",
             output_dir / "import-report.json",
             output_dir / "amped_up_model.S",
+            args.kart_source.resolve() if args.kart_source else None,
         )
         print(
             f"Prepared {generated['function_count']} unique MIPS function definitions "
@@ -305,6 +307,7 @@ def main() -> int:
             "raw_racer_colour_records": import_report["raw_racer_colour_records"],
             "model_package_hydration": import_report["model_package_hydration"],
             "recompiled_custom_functions": generated["functions"],
+            "visual_assets": generated["visual_assets"],
             "generated_function_definitions": generated["function_definitions"],
             "generated_function_definition_count": generated["function_count"],
             "tail_thunks": generated["tail_thunks"],

@@ -57,6 +57,30 @@ class AmpedImporterTests(unittest.TestCase):
             self.assertNotEqual(report["raw_segment_sha256"], report["hydrated_segment_sha256"])
 
             hydration = report["model_package_hydration"]
+            self.assertEqual([r["triangles"] for r in hydration["item_display_list_roots"]], [0,51,22,0,53])
+            self.assertEqual([r["g_vtx"] for r in hydration["item_display_list_roots"]], [0,3,2,0,5])
+            # The item import changes only addresses, never source mesh/color bytes.
+            # Measure actual triangle vertices (not the cull-box vertex loads).
+            for root in (0x804C8C48, 0x804C8AB8, 0x804C7ED0):
+                cache = {}; points = []
+                for address in range(root, root + 1024, 8):
+                    w0, w1 = struct.unpack_from(">II", hydrated_segment, address - 0x80400000)
+                    op = w0 >> 24
+                    if op == 0xB8: break
+                    if op == 4:
+                        count = (w0 >> 10) & 63; first = (w0 >> 17) & 127
+                        data = hydrated_segment[w1 - 0x400000:w1 - 0x400000 + count*16]
+                        self.assertEqual(data, raw_segment[w1 - 0x400000:w1 - 0x400000 + count*16])
+                        for i in range(count): cache[first+i] = struct.unpack_from(">hhh", data, i*16)
+                    if op in (0xBF, 0xB1):
+                        for word in ((w0,w1) if op == 0xB1 else (w1,)):
+                            points.extend(cache[((word >> shift) & 255)//2] for shift in (16,8,0))
+                origin = points[0]
+                vectors = [tuple(p[i]-origin[i] for i in range(3)) for p in points]
+                a = next(v for v in vectors if any(v))
+                normals = [(a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]) for b in vectors]
+                normal = next(n for n in normals if any(n))
+                self.assertTrue(any(sum(n*v for n,v in zip(normal,b)) != 0 for b in vectors))
             packages = hydration["packages"]
             self.assertEqual(len(packages), 8)
             self.assertEqual([package["row_index"] for package in packages], list(range(2, 64, 8)))
@@ -67,15 +91,15 @@ class AmpedImporterTests(unittest.TestCase):
             self.assertTrue(all(package["g_vtx_local_relocations"] > 0 for package in packages))
             self.assertGreater(hydration["stock_relocations"]["g_dl"], 0)
             self.assertEqual(hydration["stock_relocations"]["g_settimg"], 0)  # normal skins use shared segment textures
-            self.assertEqual(hydration["reachable_graph"]["display_lists"], 323)
-            self.assertEqual(hydration["reachable_graph"]["unique_command_addresses"], 4671)
-            self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_commands"], 461)
+            self.assertEqual(hydration["reachable_graph"]["display_lists"], 328)
+            self.assertEqual(hydration["reachable_graph"]["unique_command_addresses"], 4788)
+            self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_commands"], 471)
             self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_local_relocations"], 314)
-            self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_fixed_segment_references"], 147)
-            self.assertEqual(hydration["reachable_graph"]["unique_g_settimg_commands"], 16)
+            self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_fixed_segment_references"], 157)
+            self.assertEqual(hydration["reachable_graph"]["unique_g_settimg_commands"], 18)
             self.assertEqual(
                 hydration["reachable_graph"]["g_settimg_pointers"],
-                ["0x5B05E8", "0x5B0600", "0x5B3870", "0x5B3888", "0x5B6CF8", "0x5B6D18",
+                ["0x4C9218", "0x4C92F8", "0x5B05E8", "0x5B0600", "0x5B3870", "0x5B3888", "0x5B6CF8", "0x5B6D18",
                  "0x5B9490", "0x5B94B0", "0x5BC878", "0x5BC898", "0x5BFCF8", "0x5BFD18",
                  "0x5C3178", "0x5C3198", "0x5C65F0", "0x5C6610"],
             )
@@ -97,7 +121,7 @@ class AmpedImporterTests(unittest.TestCase):
             self.assertEqual(len(hydration["code_patches"]), 15)
             self.assertEqual(
                 hydration["gbi_address_normalizations"],
-                {"g_dl": 293, "g_vtx": 461, "g_settimg": 16, "g_branch_z": 0},
+                {"g_dl": 293, "g_vtx": 471, "g_settimg": 18, "g_branch_z": 0},
             )
             static_tables = hydration["static_display_list_tables"]
             self.assertEqual(

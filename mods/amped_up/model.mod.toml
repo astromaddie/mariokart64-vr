@@ -1,10 +1,10 @@
 [manifest]
 id = "amped_up_3d_racers"
 version = "3.21.0"
-display_name = "Amped Up 3D Racers"
-description = "Private local import of the Amped Up v3.21 racer models for the NTSC-U MK64 recompilation."
-short_description = "Replaces the stock kart models with Amped Up's 3D racers."
-authors = ["Litronom"]
+display_name = "Amped Up 3D Racers and Items"
+description = "Private local import of Amped Up v3.21 3D racers and item visuals, with an optional supplied kart for local first-person view."
+short_description = "3D racers and items with an optional local first-person cockpit."
+authors = ["Litronom", "fznmeatpopsicle (optional private kart; https://twitter.com/fznmeatpopsicle)"]
 game_id = "mk64"
 minimum_recomp_version = "0.9.2"
 dependencies = []

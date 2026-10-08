@@ -26,11 +26,12 @@ private:
 // Cache only trusted seat-local attachment; invalid samples cannot overwrite it.
 class HeldItemAttachment {
 public:
-    void update(bool held, int hand, bool tracked, Vec3 position);
-    bool transform(Mat4& model, const Mat4& seatView) const;
+    void update(bool held, int hand, bool tracked, Vec3 position, Quat orientation = {});
+    bool transform(Mat4& model, const Mat4& seatView, bool orient = false, Vec3 grip = {}) const;
 private:
     bool valid=false;
     Vec3 local;
+    Quat rotation;
 };
 struct ArmSolution { Vec3 elbow, wrist; Mat4 upper, lower; };
 ArmSolution solveArm(Vec3 shoulder, Vec3 wrist, float upperLength, float lowerLength,

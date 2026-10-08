@@ -9,6 +9,7 @@
 #include "dk64vr_host.h"
 #include "mk64_interaction.h"
 #include "../../../include/mk64_frame.h"
+#include "../../../include/mk64_visual_assets.h"
 
 #include <algorithm>
 #include <array>
@@ -2377,9 +2378,10 @@ private:
         if(id==MK64_KART_GROUP && firstPersonKartAnchored) {
             fromMat4(mul(toMat4(matrix),firstPersonKartCorrection),matrix); return true;
         }
-        if(id==MK64_ITEM_GROUP) {
+        if(id==MK64_ITEM_GROUP || id==MK64_SHELL_GROUP || id==MK64_BANANA_GROUP) {
             Mat4 model=toMat4(matrix);
-            if(!firstPersonAttachment.transform(model,firstPersonView)) {
+            if(!firstPersonAttachment.transform(model,firstPersonView,id!=MK64_ITEM_GROUP,
+                id==MK64_BANANA_GROUP ? Vec3{0,27,0}:Vec3{})) {
                 // No trusted display pose yet (take consumed after tracking loss):
                 // register the safe native held point to the same smoothed kart basis.
                 if(!firstPersonKartAnchored)return false;
@@ -2389,7 +2391,11 @@ private:
             return true; // Native orientation/scale; trusted local point follows smoothed seat.
         }
         Mat4 local;
-        if ((id & 0xFF000000u) == MK64_ARM_GROUP) {
+        if(id==MK64_COCKPIT_GROUP) {
+            local=poseMatrix({{}, {0,0,0}});
+            const float units=float(setting("world_scale")) / 1000.f;
+            for(int axis=0;axis<3;axis++)local.m[axis][axis]=units;
+        } else if ((id & 0xFF000000u) == MK64_ARM_GROUP) {
             const int character=(id>>16)&7, limb=(id>>12)&3, hand=limb/2;
             if(!firstPersonExchange.hand_valid[hand]) {
                 // Finite, tiny geometry behind the seat; do not make normals singular.
@@ -2497,8 +2503,10 @@ private:
         const int itemHand=exchange.item_hand;
         const bool itemTracked=itemHand>=0 && itemHand<2 && exchange.hand_valid[itemHand];
         const float* itemPosition=itemHand>=0 && itemHand<2 ? exchange.hand_pos[itemHand] : exchange.hand_pos[0];
+        const float* itemRotation=itemHand>=0 && itemHand<2 ? exchange.hand_rot[itemHand] : exchange.hand_rot[0];
         firstPersonAttachment.update((racer.held_item!=0 || exchange.command==1) && exchange.command!=2,
-            itemHand,itemTracked,{itemPosition[0],itemPosition[1],itemPosition[2]});
+            itemHand,itemTracked,{itemPosition[0],itemPosition[1],itemPosition[2]},
+            {itemRotation[0],itemRotation[1],itemRotation[2],itemRotation[3]});
         firstPersonExchange=exchange;
         mk64_vr_publish_interaction(&exchange);
     }

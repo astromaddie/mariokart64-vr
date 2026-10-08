@@ -398,3 +398,25 @@ size = "0x58"
 "0x802B75F8" = "mtxf_to_mtx"
 "0x80004DFC" = "render_animated_model"
 "0x800CE140" = "sqrtf"
+
+# Static visuals only. No Amped item update/collision/gameplay code is imported.
+[[item_display_list_roots]]
+name = "shell_state"
+ram_address = "0x804C9158"
+triangles = 0
+[[item_display_list_roots]]
+name = "shell_base"
+ram_address = "0x804C8C48"
+triangles = 51
+[[item_display_list_roots]]
+name = "shell_colour_top"
+ram_address = "0x804C8AB8"
+triangles = 22
+[[item_display_list_roots]]
+name = "banana_state"
+ram_address = "0x804C8818"
+triangles = 0
+[[item_display_list_roots]]
+name = "banana_model"
+ram_address = "0x804C7ED0"
+triangles = 53

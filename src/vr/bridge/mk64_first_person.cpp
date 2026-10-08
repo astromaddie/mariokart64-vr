@@ -50,12 +50,24 @@ FirstPersonOutput FirstPersonControls::update(const HandSample hands[2], bool ac
     out.angle=wheelAngle; out.steering=count>0; out.steer=wheelAngle/c.maxTurn; out.itemHand=releaseHand>=0?releaseHand:holder;
     return out;
 }
-void HeldItemAttachment::update(bool held, int hand, bool tracked, Vec3 position) {
+void HeldItemAttachment::update(bool held, int hand, bool tracked, Vec3 position, Quat orientation) {
     if(!held) { valid=false; return; }
-    if(hand>=0 && hand<2 && tracked) { local=position; valid=true; }
+    const float norm=orientation.x*orientation.x+orientation.y*orientation.y+orientation.z*orientation.z+orientation.w*orientation.w;
+    if(hand>=0 && hand<2 && tracked && std::isfinite(norm) && norm>.00001f &&
+        std::isfinite(position.x) && std::isfinite(position.y) && std::isfinite(position.z)) {
+        local=position; rotation=quatNormalize(orientation); valid=true;
+    }
 }
-bool HeldItemAttachment::transform(Mat4& model, const Mat4& seatView) const {
+bool HeldItemAttachment::transform(Mat4& model, const Mat4& seatView, bool orient, Vec3 grip) const {
     if(!valid)return false;
+    if(orient) {
+        // The native draw supplies visual scale. Only the held prop receives the
+        // trusted grip orientation; loss retains it in the moving seat basis.
+        const float size=length({model.m[0][0],model.m[0][1],model.m[0][2]});
+        Mat4 posed=poseMatrix({rotation,sub(local,quatRotate(rotation,scale(grip,size)))});
+        for(int r=0;r<3;r++)for(int c=0;c<3;c++)posed.m[r][c]*=size;
+        model=mul(posed,rigidInverse(seatView)); return true;
+    }
     const Vec3 world=transformPoint(local,rigidInverse(seatView));
     model.m[3][0]=world.x;model.m[3][1]=world.y;model.m[3][2]=world.z;
     return true;

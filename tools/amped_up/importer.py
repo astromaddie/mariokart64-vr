@@ -256,6 +256,7 @@ def hydrate_model_packages(
     static_display_list_tables: list[dict] | None = None,
     emitted_display_list_roots: list[dict] | None = None,
     emitted_display_list_ranges: list[dict] | None = None,
+    item_display_list_roots: list[dict] | None = None,
 ) -> tuple[bytes, dict]:
     """Copy the eight checked selected model packages and resolve their live GBI pointers.
 
@@ -519,7 +520,7 @@ def hydrate_model_packages(
         active: set[tuple[int, tuple[int, int] | None]] = set()
         metrics = {"display_lists": 0, "commands": 0, "g_vtx": 0, "g_vtx_local_relocations": 0,
                    "g_vtx_fixed_segment": 0, "g_settimg": 0, "g_settimg_pointers": [],
-                   "g_branch_z": 0, "g_branch_z_targets": []}
+                   "g_branch_z": 0, "g_branch_z_targets": [], "triangles": 0}
         end_half1: dict[tuple[int, tuple[int, int] | None], tuple[int, int] | None] = {}
 
         def walk(address: int, depth: int = 0, incoming_half1: tuple[int, int] | None = None) -> tuple[int, int] | None:
@@ -551,6 +552,8 @@ def hydrate_model_packages(
                 metrics["commands"] += 1
                 unique_commands.add(cursor)
 
+                if opcode in (0xBF, 0xB1):
+                    metrics["triangles"] += 1 if opcode == 0xBF else 2
                 if opcode == 0x04:  # F3DEX G_VTX: n = bits 10..15, sizeof(Vtx) = 16.
                     unique_vertex_commands.add(cursor)
                     vertex_count = (w0 >> 10) & 0x3F
@@ -750,6 +753,15 @@ def hydrate_model_packages(
         seen_static_names.add(name)
         seen_static_ranges.append((address, table_end, name))
 
+    item_reports = []
+    for configured in item_display_list_roots or []:
+        address = _configured_int(configured["ram_address"], "item model root")
+        metrics = inspect_graph([address], configured["name"])
+        if metrics["triangles"] != configured["triangles"]:
+            raise ImportError(f"item root {configured['name']} triangle count changed")
+        item_reports.append({"name": configured["name"], "address": f"0x{address:08X}", **metrics})
+        all_texture_pointers.update(metrics["g_settimg_pointers"])
+
     emitted_roots = emitted_display_list_roots or []
     if len(emitted_roots) != 8:
         raise ImportError(f"expected the eight traced renderer-emitted display-list roots, found {len(emitted_roots)}")
@@ -845,6 +857,7 @@ def hydrate_model_packages(
             kind: len(addresses) for kind, addresses in normalized_gbi_addresses.items()
         },
         "static_display_list_tables": static_table_reports,
+        "item_display_list_roots": item_reports,
         "emitted_display_list_roots": emitted_root_reports,
         "emitted_display_list_ranges": emitted_range_reports,
         "external_armature_graph": {
@@ -885,6 +898,7 @@ def import_rom(source_path: Path, patch_path: Path, output_dir: Path, config_pat
         config.get("model_static_display_list_tables", []),
         config.get("model_emitted_display_list_roots", []),
         config.get("model_emitted_display_list_ranges", []),
+        config.get("item_display_list_roots", []),
     )
 
     tables = []

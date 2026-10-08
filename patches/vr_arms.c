@@ -4,6 +4,8 @@
 #include "memory.h"
 #include "../include/mk64_first_person.h"
 #include "../include/mk64_arm_rig.h"
+#include "../include/mk64_visual_assets.h"
+extern const Mk64VisualAssets* mk64_vr_visual_assets(void);
 extern Mk64VRInteraction mk64_vr_interaction;
 extern int recomp_vr_is_active(void);
 extern Vec3s sOriginalPosAnimation;
@@ -62,7 +64,7 @@ static void mk64_vr_arm_list(Gfx* list,int limb,int depth,unsigned* budget) {
                 gSPVertex(gDisplayListHead++,vertices+i,1,first+i);
                 gEXPopMatrixGroup(gDisplayListHead++,G_MTX_MODELVIEW);
             }
-        } else if(limb>=0 || (op!=0xBF && op!=0xB1 && op!=0xB5 && op!=0xE4 && op!=0xE5)) {
+        } else if(limb>=0 || (op!=0xBF && op!=0xB1 && op!=0xB5 && op!=0xE4 && op!=0xE5 && op!=0xBE)) {
             *gDisplayListHead++=command;
         }
     }
@@ -176,6 +178,55 @@ void mk64_vr_draw_wheel(void) {
         gSP2Triangles(gDisplayListHead++,v,v+1,v+2,0,v+1,v+3,v+2,0);
     }
     gSPPopMatrix(gDisplayListHead++,G_MTX_MODELVIEW);
+    gEXPopCombineMode(gDisplayListHead++);
+    gEXPopOtherMode(gDisplayListHead++);
+    gEXPopGeometryMode(gDisplayListHead++);
+    gEXPopMatrixGroup(gDisplayListHead++,G_MTX_MODELVIEW);
+}
+
+/* Replace only direct shared kart lists emitted by the local first-person draw.
+ * The articulated arms have already been expanded above into tagged vertices.
+ * Replay every material/state command of the removed geometry in the same order
+ * so its original state inheritance remains intact. No other racer is touched. */
+void mk64_vr_finish_kart(Gfx* start) {
+    if(!first_person_draw())return;
+    const Mk64VisualAssets* assets=mk64_vr_visual_assets();
+    if(!assets || !(assets->flags & MK64_VISUAL_COCKPIT))return;
+    int character=gPlayers[0].characterId;
+    if(character<0 || character>=8)return;
+    u32 root=assets->cockpit[character];
+    if(root<(MK64_VISUAL_ASSET_ADDRESS & 0xFFFFFF)+sizeof(*assets) ||
+        root>(assets->end & 0xFFFFFF)-8 || (root&7))return;
+    static volatile Gfx original[4096];
+    int count=gDisplayListHead-start;
+    if(count<0 || count>4096)return;
+    for(int i=0;i<count;i++)original[i]=start[i];
+    gDisplayListHead=start;
+    for(int i=0;i<count;i++) {
+        Gfx command=original[i];u32 pointer=command.words.w1 & 0xFFFFFF;
+        if((command.words.w0>>24)==0x06 && pointer>=0x400000 && pointer<0x72E3B0) {
+            unsigned budget=0;
+            mk64_vr_arm_list(vr_list_pointer(command.words.w1),-1,0,&budget);
+        } else *gDisplayListHead++=command;
+    }
+    init_identity();matrix_tag(MK64_COCKPIT_GROUP);
+    gEXPushGeometryMode(gDisplayListHead++);
+    gEXPushOtherMode(gDisplayListHead++);
+    gEXPushCombineMode(gDisplayListHead++);
+    gSPMatrix(gDisplayListHead++,VIRTUAL_TO_PHYSICAL(&identity),G_MTX_PUSH|G_MTX_LOAD|G_MTX_MODELVIEW);
+    gDPPipeSync(gDisplayListHead++);
+    gSPClearGeometryMode(gDisplayListHead++,G_LIGHTING|G_CULL_BACK|G_CULL_FRONT|G_TEXTURE_GEN|G_TEXTURE_GEN_LINEAR);
+    gSPSetGeometryMode(gDisplayListHead++,G_ZBUFFER|G_SHADE|G_SHADING_SMOOTH);
+    gDPSetTextureLUT(gDisplayListHead++,G_TT_NONE);
+    gDPSetCycleType(gDisplayListHead++,G_CYC_1CYCLE);
+    gDPSetAlphaCompare(gDisplayListHead++,G_AC_NONE);
+    gDPSetTextureFilter(gDisplayListHead++,G_TF_BILERP);
+    gSPTexture(gDisplayListHead++,0xFFFF,0xFFFF,0,G_TX_RENDERTILE,G_ON);
+    gDPSetCombineMode(gDisplayListHead++,G_CC_MODULATEIA,G_CC_MODULATEIA);
+    gDPSetRenderMode(gDisplayListHead++,G_RM_AA_ZB_OPA_SURF,G_RM_AA_ZB_OPA_SURF2);
+    gSPDisplayList(gDisplayListHead++,(Gfx*)root);
+    gSPPopMatrix(gDisplayListHead++,G_MTX_MODELVIEW);
+    gDPPipeSync(gDisplayListHead++);
     gEXPopCombineMode(gDisplayListHead++);
     gEXPopOtherMode(gDisplayListHead++);
     gEXPopGeometryMode(gDisplayListHead++);

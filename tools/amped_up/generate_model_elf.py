@@ -8,6 +8,7 @@ import hashlib
 import json
 import struct
 import tomllib
+from import_kart import build_extension
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,7 +26,7 @@ def load_config(path: Path) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
-def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_path: Path) -> dict:
+def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_path: Path, kart_source: Path | None = None) -> dict:
     config = load_config(config_path)
     segment_path = segment_path.resolve()
     segment = segment_path.read_bytes()
@@ -36,6 +37,14 @@ def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_
     segment_hash = hashlib.sha256(segment).hexdigest()
     if len(segment) != expected_size or segment_hash != report["hydrated_segment_sha256"]:
         raise GenerationError("hydrated custom segment does not match the validated import report")
+
+    if len(report["model_package_hydration"].get("item_display_list_roots", [])) != 5:
+        raise GenerationError("item roots must be hydrated and validated before publishing the asset descriptor")
+    extension, visual_report = build_extension(kart_source)
+    payload_path=assembly_path.with_suffix(".assets.bin")
+    payload_path.write_bytes(segment+extension)
+    payload_words=(len(segment)+len(extension))//4
+    payload_path.with_suffix(".json").write_text(json.dumps(visual_report,indent=2)+"\n")
 
     functions = config["code_functions"]
     names_by_address: dict[int, str] = {}
@@ -168,8 +177,8 @@ def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_
         "  lui $t0, %hi(amped_up_segment)",
         "  addiu $t0, $t0, %lo(amped_up_segment)",
         "  lui $t1, 0x8040",
-        "  lui $t2, 0x000C",
-        "  ori $t2, $t2, 0xB8EC",
+        f"  lui $t2, 0x{payload_words>>16:04X}",
+        f"  ori $t2, $t2, 0x{payload_words & 0xffff:04X}",
         "1:",
         "  lw $t3, 0($t0)",
         "  sw $t3, 0($t1)",
@@ -186,7 +195,7 @@ def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_
         ".balign 16",
         ".globl amped_up_segment",
         "amped_up_segment:",
-        f'.incbin "{segment_path.relative_to(ROOT).as_posix()}"',
+        f'.incbin "{payload_path.resolve().relative_to(ROOT).as_posix()}"',
         "",
     ]
     definition_names.append("amped_up_copy_segment")
@@ -203,6 +212,7 @@ def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_
     assembly_path.write_text("\n".join(lines), encoding="utf-8")
     return {
         "hydrated_segment_sha256": segment_hash,
+        "visual_assets": visual_report,
         "function_count": len(definition_names),
         "extracted_function_count": len(functions),
         "function_definitions": definition_names,
@@ -223,8 +233,9 @@ def main() -> int:
     parser.add_argument("--segment", type=Path, default=DEFAULT_SEGMENT)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--assembly", type=Path, default=DEFAULT_ASSEMBLY)
+    parser.add_argument("--kart-source", type=Path, help="private extracted supplied kart directory; omit for original cockpit")
     args = parser.parse_args()
-    result = generate(args.config, args.segment, args.report, args.assembly)
+    result = generate(args.config, args.segment, args.report, args.assembly, args.kart_source)
     print(
         f"generated {result['function_count']} unique function definitions "
         f"({result['extracted_function_count']} extracted) and {len(result['call_targets'])} resolved targets"
