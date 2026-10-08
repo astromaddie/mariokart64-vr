@@ -108,9 +108,11 @@ int main(int argc,char** argv){
         init(rdram);MEM_H(S32(A_gPlayers),0x10)=item;command.command=1;
         call(rdram,mk64_vr_tick,0);assert(consumed==1);assert(MEM_H(S32(A_gActorList),6)==0);
         assert(MEM_W(S32(A_held_index),0)==0);
+        float heldX=F(A_gActorList,0x18),heldY=F(A_gActorList,0x1c),heldZ=F(A_gActorList,0x20);
         command.command=2;command.rear=rear;command.velocity[2]=quiet?0:-3;
         call(rdram,mk64_vr_tick,0);
         assert(MEM_W(S32(A_held_index),0)==-1);
+        if(!rear)assert(F(A_gActorList,0x18)==heldX && F(A_gActorList,0x1c)==heldY && F(A_gActorList,0x20)==heldZ);
         assert(MEM_H(S32(A_gActorList),6)==(item==1?1:2));
         if(item==1 && (rear||quiet))assert(F(A_gActorList,0x2c)==0);
         if(item!=1)assert(fabs(F(A_gActorList,0x2c)-(rear?-8:quiet?.05f:3))<.001);
@@ -128,15 +130,16 @@ int main(int argc,char** argv){
         command.hand_pos[1][0]=2;command.hand_pos[1][1]=-1;command.hand_pos[1][2]=-3;
         command.command=1;call(rdram,mk64_vr_tick,0);
         assert(MEM_BU(S32(A_held_local_valid),0)==1);
-        assert(fabs(F(A_gActorList,0x18)+2)<.001 && fabs(F(A_gActorList,0x1c)-5)<.001 && fabs(F(A_gActorList,0x20)-3)<.001);
+        float expectedY=item==1?8.84f:9.f,expectedZ=item==1?3.f:5.4f;
+        assert(fabs(F(A_gActorList,0x18)+2)<.001 && fabs(F(A_gActorList,0x1c)-expectedY)<.001 && fabs(F(A_gActorList,0x20)-expectedZ)<.001);
         command.hand_valid[1]=0;memset(command.hand_pos,0,sizeof command.hand_pos);command.command=3;
         F(A_gPlayers,0x14)=100;F(A_gPlayers,0x18)=20;F(A_gPlayers,0x1c)=-50;
         MEM_H(S32(A_gPlayers),0x2e)=0x4000;
         call(rdram,mk64_vr_tick,0);
         assert(MEM_W(S32(A_held_index),0)==0 && MEM_H(S32(A_gActorList),6)==0);
-        assert(fabs(F(A_gActorList,0x18)-97)<.001 && fabs(F(A_gActorList,0x1c)-25)<.001 && fabs(F(A_gActorList,0x20)+52)<.001);
+        assert(fabs(F(A_gActorList,0x18)-(100-expectedZ))<.001 && fabs(F(A_gActorList,0x1c)-(20+expectedY))<.001 && fabs(F(A_gActorList,0x20)+52)<.001);
         F(A_gPlayers,0x14)=200;call(rdram,mk64_vr_tick,0);
-        assert(fabs(F(A_gActorList,0x18)-197)<.001 && MEM_H(S32(A_gActorList),6)==0);
+        assert(fabs(F(A_gActorList,0x18)-(200-expectedZ))<.001 && MEM_H(S32(A_gActorList),6)==0);
         call(rdram,item==1?destroy_destructable_actor:destroy_actor,A_gActorList);
         assert(MEM_W(S32(A_held_index),0)==-1 && MEM_BU(S32(A_held_local_valid),0)==0);
         // Destructable banana first enters its native death animation; finish its
@@ -150,6 +153,19 @@ int main(int argc,char** argv){
         assert(fabs(freshX-197)>.01 || fabs(freshY-25)>.01 || fabs(freshZ+52)>.01);
         F(A_gPlayers,0x14)+=50;call(rdram,mk64_vr_tick,0);
         assert(fabs(F(A_gActorList,0x18)-freshX-50)<.001 && MEM_H(S32(A_gActorList),6)==0);
+    }
+    // Pitching the hand rotates the hover offset and banana grasp correction,
+    // without moving the raw hand or introducing a forward-release origin jump.
+    for(int item=1;item<=5;item+=2) {
+        init(rdram);MEM_H(S32(A_gPlayers),0x10)=item;
+        command.hand_pos[1][0]=2;command.hand_pos[1][1]=-1;command.hand_pos[1][2]=-3;
+        command.hand_rot[1][0]=command.hand_rot[1][3]=.70710678f;
+        command.command=1;call(rdram,mk64_vr_tick,0);
+        float expectedY=item==1?7.f:7.4f,expectedZ=item==1?1.16f:-1.f;
+        assert(fabs(F(A_gActorList,0x18)+2)<.001);
+        assert(fabs(F(A_gActorList,0x1c)-expectedY)<.001 && fabs(F(A_gActorList,0x20)-expectedZ)<.001);
+        command.command=2;command.velocity[2]=-3;call(rdram,mk64_vr_tick,0);
+        assert(fabs(F(A_gActorList,0x1c)-expectedY)<.001 && fabs(F(A_gActorList,0x20)-expectedZ)<.001);
     }
     // The existing item button releases a tracked item through its real native
     // held-state handler, consuming the off edge and clearing VR ownership once.

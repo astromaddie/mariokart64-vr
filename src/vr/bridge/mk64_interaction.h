@@ -27,7 +27,8 @@ private:
 class HeldItemAttachment {
 public:
     void update(bool held, int hand, bool tracked, Vec3 position, Quat orientation = {});
-    bool transform(Mat4& model, const Mat4& seatView, bool orient = false, Vec3 grip = {}) const;
+    bool transform(Mat4& model, const Mat4& seatView, bool orient = false, Vec3 grip = {},
+        int actorType = 0, float worldScale = 1.f) const;
 private:
     bool valid=false;
     Vec3 local;

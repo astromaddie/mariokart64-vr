@@ -58,17 +58,20 @@ void HeldItemAttachment::update(bool held, int hand, bool tracked, Vec3 position
         local=position; rotation=quatNormalize(orientation); valid=true;
     }
 }
-bool HeldItemAttachment::transform(Mat4& model, const Mat4& seatView, bool orient, Vec3 grip) const {
+bool HeldItemAttachment::transform(Mat4& model, const Mat4& seatView, bool orient, Vec3 grip, int actorType, float worldScale) const {
     if(!valid)return false;
+    const float hand[3]={local.x,local.y,local.z}, q[4]={rotation.x,rotation.y,rotation.z,rotation.w};
+    float target[3];mk64_vr_held_item_anchor(target,hand,q,actorType,worldScale);
+    const Vec3 anchor{target[0],target[1],target[2]};
     if(orient) {
         // The native draw supplies visual scale. Only the held prop receives the
         // trusted grip orientation; loss retains it in the moving seat basis.
         const float size=length({model.m[0][0],model.m[0][1],model.m[0][2]});
-        Mat4 posed=poseMatrix({rotation,sub(local,quatRotate(rotation,scale(grip,size)))});
+        Mat4 posed=poseMatrix({rotation,sub(anchor,quatRotate(rotation,scale(grip,size)))});
         for(int r=0;r<3;r++)for(int c=0;c<3;c++)posed.m[r][c]*=size;
         model=mul(posed,rigidInverse(seatView)); return true;
     }
-    const Vec3 world=transformPoint(local,rigidInverse(seatView));
+    const Vec3 world=transformPoint(anchor,rigidInverse(seatView));
     model.m[3][0]=world.x;model.m[3][1]=world.y;model.m[3][2]=world.z;
     return true;
 }

@@ -162,6 +162,23 @@ int main(){
         assert(near(tip.x-point.x,std::sin(1.1f),.01f));
         assert(near(tip.z-point.z,std::cos(1.1f),.01f));
     }
+    // Production hand-relative calibration clears the palm without moving IK.
+    // A rotated hand turns the forward offset; invalid tracking retains it.
+    for(int type=6;type<=8;type++) {
+        const Quat q=quatFromYaw(1.1f);
+        const Vec3 hand{2,-1,-3}, grasp=type==6?Vec3{0,27,0}:Vec3{};
+        attachment.update(true,1,true,hand,q);
+        attachment.update(true,1,false,{},{});
+        Mat4 model=poseMatrix({{}, {}});
+        for(int axis=0;axis<3;axis++)model.m[axis][axis]=type==6?.08f:.1f;
+        assert(attachment.transform(model,Mat4{},true,grasp,type,15.f));
+        const Vec3 point=transformPoint(grasp,model);
+        const Vec3 offset=quatRotate(q,type==6?Vec3{0,6,0}:Vec3{0,6.f,-3.6f});
+        assert(near(point.x,hand.x+offset.x,.001f));
+        assert(near(point.y,hand.y+offset.y,.001f));
+        assert(near(point.z,hand.z+offset.z,.001f));
+        assert(near(std::sqrt(model.m[0][0]*model.m[0][0]+model.m[0][1]*model.m[0][1]+model.m[0][2]*model.m[0][2]),type==6?.08f:.1f,.001f));
+    }
     attachment.update(false,-1,false,{});
     Mat4 itemModel;assert(!attachment.transform(itemModel,Mat4{}));
     attachment.update(true,1,false,{});assert(!attachment.transform(itemModel,Mat4{}));

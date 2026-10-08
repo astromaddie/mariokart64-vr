@@ -49,7 +49,17 @@ static void cache_native_attachment(struct Actor* actor) {
 static void hand_position(struct Actor* actor) {
     int hand=mk64_vr_interaction.item_hand;
     if (hand >= 0 && hand <= 1 && mk64_vr_interaction.hand_valid[hand]) {
-        for(int i=0;i<3;i++) held_local[i]=mk64_vr_interaction.hand_pos[hand][i];
+        const float* rotation=mk64_vr_interaction.hand_rot[hand];
+        mk64_vr_held_item_anchor(held_local,mk64_vr_interaction.hand_pos[hand],rotation,
+            held_type,mk64_vr_interaction.world_scale);
+        if(held_type==ACTOR_BANANA) {
+            // Display grips source Y=27 at scale .08; native render subtracts
+            // 2 game units from actor Y. Align the native origin with that mesh.
+            float grip[3]={0,27.f*.08f,0}, rotated[3];
+            mk64_vr_rotate_hand_vector(rotated,rotation,grip);
+            for(int i=0;i<3;i++)held_local[i]-=rotated[i];
+            held_local[1]+=2.f;
+        }
         held_local_valid=1;
     }
     // Tracking loss is not a release: retain the last trusted seat-local point,

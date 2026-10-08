@@ -2381,7 +2381,9 @@ private:
         if(id==MK64_ITEM_GROUP || id==MK64_SHELL_GROUP || id==MK64_BANANA_GROUP) {
             Mat4 model=toMat4(matrix);
             if(!firstPersonAttachment.transform(model,firstPersonView,id!=MK64_ITEM_GROUP,
-                id==MK64_BANANA_GROUP ? Vec3{0,27,0}:Vec3{})) {
+                id==MK64_BANANA_GROUP ? Vec3{0,27,0}:Vec3{},
+                id==MK64_BANANA_GROUP ? 6 : id==MK64_SHELL_GROUP ? 7 : firstPersonItemType,
+                float(setting("world_scale")))) {
                 // No trusted display pose yet (take consumed after tracking loss):
                 // register the safe native held point to the same smoothed kart basis.
                 if(!firstPersonKartAnchored)return false;
@@ -2507,6 +2509,7 @@ private:
         firstPersonAttachment.update((racer.held_item!=0 || exchange.command==1) && exchange.command!=2,
             itemHand,itemTracked,{itemPosition[0],itemPosition[1],itemPosition[2]},
             {itemRotation[0],itemRotation[1],itemRotation[2],itemRotation[3]});
+        firstPersonItemType=racer.held_item;
         firstPersonExchange=exchange;
         mk64_vr_publish_interaction(&exchange);
     }
@@ -3891,6 +3894,7 @@ private:
 
     mk64vr::FirstPersonControls firstPersonControls;
     mk64vr::HeldItemAttachment firstPersonAttachment;
+    int firstPersonItemType=0;
     CameraSmoother seatSmoother;
     Mat4 firstPersonView, firstPersonKartCorrection;
     bool firstPersonKartAnchored=false;

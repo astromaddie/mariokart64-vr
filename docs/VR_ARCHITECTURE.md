@@ -458,6 +458,14 @@ remain on their existing path. Older or absent private mods retain the retail
 visuals. Source inspection evidence, tied to the ROM hash, is in
 `build/amped_up/{green-shell,banana}-model-evidence.json`.
 
+Held shell centres sit 40 cm above and 24 cm forward of the tracked hand;
+banana centres sit 40 cm above it. Their lower geometry clears the palm in the
+matched native pose. These offsets follow the hand's orientation while the
+arm/grip pose stays at the controller. A shared anchor calculation aligns native
+attachment and forward-release origins with the displayed prop. Tracking loss
+retains the adjusted position on the moving seat; rear-release selection still
+uses the raw hand position.
+
 Eight host suites pass, including production grip latching, clockwise steering,
 quiet/forward/rear releases, invalid-tracking recovery, View tap/hold routing and
 all-eight skin transforms. The regenerated MIPS animation harness passes 2,192
@@ -528,3 +536,12 @@ the wheel's shared steering transform/fallback, all eight cockpit palettes,
 chase/remote gates, item scales and red-shell colour; the remaining colours,
 physical wrist poses and released-prop appearance were not recaptured on the
 device. These screenshots do not establish worn comfort or performance.
+
+The palm-clearance adjustment was then inspected in matched native stereo
+captures: both the shell and banana float clear of the full right glove.
+Shell evidence is in `captures/float-green-40up-24forward/` above, from
+executable `8d9813b0…`; banana evidence is in `captures/float-banana-40up/`, from
+the combined executable `95eeb6a1…`. That final build keeps the same shell
+calibration and external NRM. Focused production attachment and native MIPS
+checks cover wrist rotation, tracking-loss retention and forward-release origin;
+physical throwing comfort remains unverified.
