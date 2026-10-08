@@ -51,6 +51,7 @@ static void mk64_vr_arm_list(Gfx* list,int limb,int depth,unsigned* budget) {
             mk64_vr_arm_list(vr_list_pointer(command.words.w1),limb,depth+1,budget);
             if(command.words.w0 & 0x10000) return;
         } else if(op==0x04) {
+            if(limb<0) continue; // hidden geometry must still execute its material state
             int count=(command.words.w0>>10)&63, first=(command.words.w0>>17)&127;
             Vtx* vertices=vr_list_pointer(command.words.w1);
             int character=gPlayers[0].characterId;
@@ -61,7 +62,9 @@ static void mk64_vr_arm_list(Gfx* list,int limb,int depth,unsigned* budget) {
                 gSPVertex(gDisplayListHead++,vertices+i,1,first+i);
                 gEXPopMatrixGroup(gDisplayListHead++,G_MTX_MODELVIEW);
             }
-        } else *gDisplayListHead++=command;
+        } else if(limb>=0 || (op!=0xBF && op!=0xB1 && op!=0xB5 && op!=0xE4 && op!=0xE5)) {
+            *gDisplayListHead++=command;
+        }
     }
 }
 RECOMP_PATCH void render_limb_or_add_mtx(Armature* arg0, s16* arg1, AnimationLimbVector arg2, s32 timeCycle) {
@@ -113,7 +116,12 @@ RECOMP_PATCH void render_limb_or_add_mtx(Armature* arg0, s16* arg1, AnimationLim
             init_identity();
             unsigned budget=0;
             mk64_vr_arm_list(model,selector-2,0,&budget);
-        } else if (selector != 0 && selector != 1 && selector != 6) {
+        } else if (selector == 0 || selector == 1 || selector == 6) {
+            // Body/head lists also establish inherited combiner, texture and geometry
+            // state (different for each racer). Suppress only their geometry.
+            unsigned budget=0;
+            mk64_vr_arm_list(model,-1,0,&budget);
+        } else {
             gSPDisplayList(gDisplayListHead++, model);
         }
     }
@@ -148,11 +156,13 @@ void mk64_vr_draw_wheel(void) {
         ready=1;
     }
     init_identity(); matrix_tag(MK64_WHEEL_GROUP);
+    gEXPushGeometryMode(gDisplayListHead++);
+    gEXPushOtherMode(gDisplayListHead++);
+    gEXPushCombineMode(gDisplayListHead++);
     gSPMatrix(gDisplayListHead++,VIRTUAL_TO_PHYSICAL(&identity),G_MTX_PUSH|G_MTX_LOAD|G_MTX_MODELVIEW);
     gDPPipeSync(gDisplayListHead++);
     gSPClearGeometryMode(gDisplayListHead++,G_LIGHTING|G_CULL_BACK|G_CULL_FRONT);
     gSPSetGeometryMode(gDisplayListHead++,G_ZBUFFER|G_SHADE|G_SHADING_SMOOTH);
-    gSPTexture(gDisplayListHead++,0,0,0,G_TX_RENDERTILE,G_OFF);
     gDPSetCombineMode(gDisplayListHead++,G_CC_SHADE,G_CC_SHADE);
     gDPSetRenderMode(gDisplayListHead++,G_RM_AA_ZB_OPA_SURF,G_RM_AA_ZB_OPA_SURF2);
     gSPVertex(gDisplayListHead++,rim,32,0);
@@ -166,5 +176,8 @@ void mk64_vr_draw_wheel(void) {
         gSP2Triangles(gDisplayListHead++,v,v+1,v+2,0,v+1,v+3,v+2,0);
     }
     gSPPopMatrix(gDisplayListHead++,G_MTX_MODELVIEW);
+    gEXPopCombineMode(gDisplayListHead++);
+    gEXPopOtherMode(gDisplayListHead++);
+    gEXPopGeometryMode(gDisplayListHead++);
     gEXPopMatrixGroup(gDisplayListHead++,G_MTX_MODELVIEW);
 }

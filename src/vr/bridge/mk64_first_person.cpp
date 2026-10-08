@@ -5,7 +5,7 @@ namespace mk64vr {
 static Vec3 sub(Vec3 a, Vec3 b) { return {a.x-b.x,a.y-b.y,a.z-b.z}; }
 static Vec3 add(Vec3 a, Vec3 b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
 static Vec3 scale(Vec3 a, float s) { return {a.x*s,a.y*s,a.z*s}; }
-static float length(Vec3 a) { return float(std::sqrt(double(dot(a,a)))); }
+static float length(Vec3 a) { return float(std::hypot(double(a.x),double(a.y),double(a.z))); }
 FirstPersonOutput FirstPersonControls::update(const HandSample hands[2], bool active, bool reset,
     bool available, bool held, const FirstPersonConfig& c) {
     FirstPersonOutput out;
@@ -68,6 +68,10 @@ ArmSolution solveArm(Vec3 shoulder, Vec3 wrist, float upperLength, float lowerLe
     ArmSolution out;
     Vec3 delta=sub(wrist,shoulder); float distance=length(delta);
     Vec3 axis=distance>.0001f?scale(delta,1/distance):Vec3{0,0,-1};
+    // Cartoon source limbs are shorter than a seated human reach. Extend only
+    // their bone axes, bounded for extreme controller poses; preserve mesh width.
+    const float extension=std::clamp(distance/std::max(.001f,upperLength+lowerLength-.001f),1.f,2.5f);
+    upperLength*=extension; lowerLength*=extension;
     const float reach=std::clamp(distance,std::abs(upperLength-lowerLength)+.001f,upperLength+lowerLength-.001f);
     out.wrist=add(shoulder,scale(axis,reach));
     Vec3 bend=sub(pole,scale(axis,dot(pole,axis)));
@@ -94,7 +98,25 @@ static Mat4 around(Quat rotation, Vec3 sourcePivot, Vec3 targetPivot, float scal
     m.m[3][0]=targetPivot.x-p.x; m.m[3][1]=targetPivot.y-p.y; m.m[3][2]=targetPivot.z-p.z;
     return m;
 }
+static Mat4 aroundBone(Quat rotation, Vec3 sourcePivot, Vec3 targetPivot, float modelScale,
+                       Vec3 sourceBone, float targetLength) {
+    const Vec3 n=normalize(sourceBone);
+    const float ratio=targetLength/std::max(.0001f,length(sourceBone)*modelScale);
+    const float axis[3]={n.x,n.y,n.z};
+    Mat4 strain;
+    for(int r=0;r<3;r++)for(int c=0;c<3;c++)strain.m[r][c]+=(ratio-1)*axis[r]*axis[c];
+    Mat4 result=mul(strain,around(rotation,{}, {},modelScale));
+    const Vec3 p=transformDir(sourcePivot,result);
+    result.m[3][0]=targetPivot.x-p.x;result.m[3][1]=targetPivot.y-p.y;result.m[3][2]=targetPivot.z-p.z;
+    return result;
+}
 Mat4 armSkinMatrix(int character, int hand, int lower, int weight, const Pose& wrist, float modelScale, float eyeHeight) {
+    const float values[]={wrist.p.x,wrist.p.y,wrist.p.z,wrist.q.x,wrist.q.y,wrist.q.z,wrist.q.w,modelScale,eyeHeight};
+    bool finite=character>=0 && character<8 && hand>=0 && hand<2 && modelScale>.00001f && modelScale<1;
+    for(float v:values)finite=finite && std::isfinite(v);
+    if(!finite) {
+        Mat4 hidden;hidden.m[0][0]=hidden.m[1][1]=hidden.m[2][2]=.00001f;hidden.m[3][2]=1;return hidden;
+    }
     const auto& rig=mk64_arm_rigs[character]; const float side=hand==0?1.f:-1.f;
     // Amped model +X is left and +Z forward, opposite the seat X/Z axes.
     Vec3 sourceShoulder{rig.shoulder[0]*side,rig.shoulder[1],rig.shoulder[2]};
@@ -109,8 +131,8 @@ Mat4 armSkinMatrix(int character, int hand, int lower, int weight, const Pose& w
     const Quat lowerQ=quatMul(fromTo(toSeat(sourceWrist),sub(solved.wrist,solved.elbow)),rest);
     // Grip-pose basis is also camera right/up/back. Rest model basis faces +Z.
     const Quat handQ=quatMul(wrist.q,rest);
-    Mat4 upper=around(upperQ,{},shoulder,modelScale);
-    Mat4 fore=around(lowerQ,lower?Vec3{}:sourceElbow,solved.elbow,modelScale);
+    Mat4 upper=aroundBone(upperQ,{},shoulder,modelScale,sourceElbow,length(sub(solved.elbow,shoulder)));
+    Mat4 fore=aroundBone(lowerQ,lower?Vec3{}:sourceElbow,solved.elbow,modelScale,sourceWrist,length(sub(solved.wrist,solved.elbow)));
     Mat4 distal=around(handQ,lower?sourceWrist:add(sourceElbow,sourceWrist),solved.wrist,modelScale);
     float t=weight/31.f; Mat4 a=fore,b=distal;
     if(!lower && character!=3) return upper;

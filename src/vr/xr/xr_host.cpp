@@ -2399,7 +2399,14 @@ private:
                 Pose wrist;
                 const auto& p=firstPersonExchange.hand_pos[hand]; const auto& q=firstPersonExchange.hand_rot[hand];
                 wrist.p={p[0],p[1],p[2]}; wrist.q={q[0],q[1],q[2],q[3]};
-                local=mk64vr::armSkinMatrix(character,hand,limb&1,id&31,wrist,float(std::sqrt(double(matrix[0]*matrix[0]+matrix[1]*matrix[1]+matrix[2]*matrix[2]))),firstPersonExchange.seat_height);
+                const float modelScale=float(std::sqrt(double(matrix[0]*matrix[0]+matrix[1]*matrix[1]+matrix[2]*matrix[2])));
+                local=mk64vr::armSkinMatrix(character,hand,limb&1,id&31,wrist,modelScale,firstPersonExchange.seat_height);
+                const uint32_t bit=1u<<(character*4+limb);
+                if(setting("diag_grip_seconds")>0 && !(armDiagSeen&bit)) {
+                    armDiagSeen|=bit;
+                    dk64vr_logf("arm matrix character=%d limb=%d scale=%.6f target=%.3f,%.3f,%.3f eye=%.3f source_position=%.3f,%.3f,%.3f",
+                        character,limb,modelScale,p[0],p[1],p[2],firstPersonExchange.seat_height,matrix[12],matrix[13],matrix[14]);
+                }
             }
         } else if(id==MK64_WHEEL_GROUP) {
             const float a=-firstPersonExchange.wheel_angle;
@@ -3883,6 +3890,7 @@ private:
     bool firstPersonReset = true;
     double gripDiagStart = 0;
     int gripDiagStage=-1;
+    uint32_t armDiagSeen=0;
     XrInput input;
     InputMapper mapper;
     sfvr_adjust_state adjustmentState = {};

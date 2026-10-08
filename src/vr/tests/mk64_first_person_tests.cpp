@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 using namespace mk64vr;
 static bool near(float a,float b,float eps=.001f){return std::abs(a-b)<eps;}
 int main(){
@@ -78,6 +79,25 @@ int main(){
         assert(!near(a.m[0][0],b.m[0][0],1e-5f));
         for(auto& row:b.m)for(float value:row)assert(std::isfinite(value));
         if(racer==3){ auto shoulder=armSkinMatrix(racer,hand,0,0,wrist,.005f,5.48f);auto distal=armSkinMatrix(racer,hand,0,31,wrist,.005f,5.48f);assert(!near(shoulder.m[3][2],distal.m[3][2])); }
+    }
+    // Actual authored grip pivot reaches the rim for every racer without widening
+    // the mesh. Extreme reaches stay bounded; invalid samples produce finite hidden geometry.
+    for(int racer=0;racer<8;racer++)for(int hand=0;hand<2;hand++) {
+        const auto& rig=mk64_arm_rigs[racer];const float side=hand==0?1.f:-1.f;
+        const bool fused=racer==3;
+        Vec3 pivot{rig.wrist[0]*side,rig.wrist[1],rig.wrist[2]};
+        if(fused){pivot.x+=rig.elbow[0]*side;pivot.y+=rig.elbow[1];pivot.z+=rig.elbow[2];}
+        Pose target{{},{hand?1.8f:-1.8f,-2.8f,-2.8f}};
+        auto skin=armSkinMatrix(racer,hand,fused?0:1,31,target,.005f,rig.eye_height);
+        Vec3 grip=transformPoint(pivot,skin);
+        assert(near(grip.x,target.p.x,.005f) && near(grip.y,target.p.y,.005f) && near(grip.z,target.p.z,.005f));
+        Vec3 width=transformDir({1,0,0},skin);assert(near(std::sqrt(dot(width,width)),.005f,.00001f));
+        target.p={1000000,1000000,1000000};
+        skin=armSkinMatrix(racer,hand,fused?0:1,31,target,.005f,rig.eye_height);
+        grip=transformPoint(pivot,skin);assert(std::sqrt(dot(grip,grip))<25);
+        target.p.x=std::numeric_limits<float>::quiet_NaN();
+        skin=armSkinMatrix(racer,hand,fused?0:1,31,target,.005f,rig.eye_height);
+        for(auto& row:skin.m)for(float v:row)assert(std::isfinite(v));
     }
     // Eye, local kart, wheel and shoulders share the same rigid basis even when
     // source interpolation differs from the low-smoothed seat at large coordinates.

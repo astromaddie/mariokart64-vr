@@ -97,6 +97,26 @@ void convert_to_fixed_point_matrix_animation(uint8_t* rdram, recomp_context* ctx
     source += declarations + "\n"
     source += "\n".join(f"void {name}(uint8_t* rdram, recomp_context* ctx) {{{body}" for name, body in selected.items())
     source += r'''
+// Compare inherited authored material/state across flattened first-person emission
+// and the untouched source display-list traversal. Geometry/matrix tags are excluded.
+static unsigned state_hash(uint8_t* rdram,unsigned start,unsigned end,unsigned hash,int depth) {
+    assert(depth<20);
+    for(unsigned address=start;address<end;address+=8) {
+        unsigned w0=MEM_W(S32(address),0),w1=MEM_W(S32(address),4),op=w0>>24;
+        if(op==0xb8)return hash;
+        if(op==6) {
+            unsigned target=0x80000000u|(w1&0xffffff);
+            hash=state_hash(rdram,target,target+32768,hash,depth+1);
+            if(w0&0x10000)return hash;
+        } else if(op==0xb6 || op==0xb7 || op==0xbb || op==0xba || op==0xb9 ||
+            op==0xfc || op==0xfd || op==0xf5 || op==0xf2 || op==0xf3 || op==0xf0 ||
+            op==0xfb || op==0xfa || op==0xf8 || op==0xf9 || op==0xe6 || op==0xe7 ||
+            op==0xe8 || op==0xdb || op==0xdc || op==0xbc || op==0x03) {
+            hash=(hash^w0)*16777619u;hash=(hash^w1)*16777619u;
+        }
+    }
+    return hash;
+}
 int main(int argc, char** argv) {
     uint8_t* rdram = calloc(1, 0x2000000);
     FILE* f = fopen(argv[1], "rb"); assert(f);
@@ -166,7 +186,18 @@ int main(int argc, char** argv) {
         }
         assert(vertices>0 && (seen & 5)==5 && anchors==1);
         if(character==3)assert((weights&1) && (weights&0x80000000u));
+        unsigned emittedState=state_hash(rdram,0x80300000,end,2166136261u,0);
+        MEM_W(S32(FP_LOCAL_DRAW),0)=0;
+        MEM_W(S32(0x80150298),0)=S32(0x80300000);MEM_W(S32(0x8018d120),0)=0;
+        ctx=(recomp_context){0};ctx.r29=S32(0x803f0000);ctx.r31=S32(0x80001234);
+        ctx.r4=MEM_W(S32(0x805a4740),character*4);ctx.r5=0x005a5400;ctx.r6=animation;ctx.r7=31;
+        render_animated_model(rdram,&ctx);
+        unsigned originalState=state_hash(rdram,0x80300000,MEM_W(S32(0x80150298),0),2166136261u,0);
+        assert(emittedState==originalState);
+        MEM_W(S32(FP_LOCAL_DRAW),0)=1;
 """)
+    if args.first_person:
+        source=source.replace("FP_LOCAL_DRAW",f"0x{patch_symbols['mk64_vr_local_draw']:08x}u")
     with tempfile.TemporaryDirectory(prefix="amped-animation-") as directory:
         path = Path(directory)
         (path / "test.c").write_text(source)
