@@ -365,7 +365,8 @@ normal saved profile remains LOW smoothing, automatic 2160-square eyes, 120 Hz,
 
 ## First-person controls proposal
 
-The [interactive review sketch](mockups/mk64-first-person.html) proposes an optional
+The [hosted interactive review sketch](https://mk64-first-person-mockup.astromaddie.chatgpt.site)
+([local copy](mockups/mk64-first-person.html)) proposes an optional
 seated racer-eye view, visible racer arms with elbow IK, a grip-operated steering
 wheel, and hand-held shells/bananas released by a throwing gesture. It includes
 both off-wheel grip acquisition and a side pickup variant. One hand can steer
