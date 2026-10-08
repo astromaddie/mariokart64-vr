@@ -91,7 +91,26 @@ int main(){
         assert(near(kartOrigin.x,0,.01f) && near(kartOrigin.y,-6,.01f) && near(kartOrigin.z,0,.01f));
         Vec3 kartFront=transformDir({0,0,1},mul(mul(source,correction),view));
         assert(near(kartFront.x,0,.001f) && near(kartFront.z,-1,.001f));
+        // Pending take with no trusted display cache uses the native held-point
+        // fallback through precisely this correction, retaining its seat offset.
+        Mat4 nativeItem=poseMatrix({{},transformPoint({-2,5,3},source)});
+        Vec3 heldPoint=transformPoint({},mul(mul(nativeItem,correction),view));
+        assert(near(heldPoint.x,2,.01f) && near(heldPoint.y,-1,.01f) && near(heldPoint.z,-3,.01f));
     }
+    // Production display attachment uses the last trusted local point even when
+    // invalid input is zeroed, and follows the same moving/turning smoothed seat.
+    HeldItemAttachment attachment;
+    attachment.update(true,1,true,{2,-1,-3});
+    attachment.update(true,1,false,{});
+    for(int tick=0;tick<20;tick++) {
+        Mat4 view=rigidInverse(poseMatrix({quatFromYaw(tick*.15f),{10000.f+tick*5,20,-20000.f+tick*3}}));
+        Mat4 model;assert(attachment.transform(model,view));
+        Vec3 point=transformPoint({},mul(model,view));
+        assert(near(point.x,2,.01f) && near(point.y,-1,.01f) && near(point.z,-3,.01f));
+    }
+    attachment.update(false,-1,false,{});
+    Mat4 itemModel;assert(!attachment.transform(itemModel,Mat4{}));
+    attachment.update(true,1,false,{});assert(!attachment.transform(itemModel,Mat4{}));
     for(int p=0;p<dk64vr::profileCount();p++) {
         const auto& profile=dk64vr::profileAt(p);bool grip[2]{};
         for(int i=0;i<profile.count;i++){grip[0]|=profile.bindings[i].action==dk64vr::ActGripLeft;grip[1]|=profile.bindings[i].action==dk64vr::ActGripRight;}

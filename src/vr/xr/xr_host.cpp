@@ -2378,12 +2378,15 @@ private:
             fromMat4(mul(toMat4(matrix),firstPersonKartCorrection),matrix); return true;
         }
         if(id==MK64_ITEM_GROUP) {
-            const int hand=firstPersonExchange.item_hand;
-            if(hand<0 || hand>1 || !firstPersonExchange.hand_valid[hand])return false;
-            const auto& p=firstPersonExchange.hand_pos[hand];
-            const Vec3 world=transformPoint({p[0],p[1],p[2]},rigidInverse(firstPersonView));
-            matrix[12]=world.x;matrix[13]=world.y;matrix[14]=world.z;
-            return true; // Keep the native shell billboard/banana orientation and scale.
+            Mat4 model=toMat4(matrix);
+            if(!firstPersonAttachment.transform(model,firstPersonView)) {
+                // No trusted display pose yet (take consumed after tracking loss):
+                // register the safe native held point to the same smoothed kart basis.
+                if(!firstPersonKartAnchored)return false;
+                model=mul(model,firstPersonKartCorrection);
+            }
+            fromMat4(model,matrix);
+            return true; // Native orientation/scale; trusted local point follows smoothed seat.
         }
         Mat4 local;
         if ((id & 0xFF000000u) == MK64_ARM_GROUP) {
@@ -2484,6 +2487,11 @@ private:
                 racer.player_pos[0][0],racer.player_pos[0][1],racer.player_pos[0][2],racer.racer_heading);
             gripDiagStage=diagnosticStage;
         }
+        const int itemHand=exchange.item_hand;
+        const bool itemTracked=itemHand>=0 && itemHand<2 && exchange.hand_valid[itemHand];
+        const float* itemPosition=itemHand>=0 && itemHand<2 ? exchange.hand_pos[itemHand] : exchange.hand_pos[0];
+        firstPersonAttachment.update((racer.held_item!=0 || exchange.command==1) && exchange.command!=2,
+            itemHand,itemTracked,{itemPosition[0],itemPosition[1],itemPosition[2]});
         firstPersonExchange=exchange;
         mk64_vr_publish_interaction(&exchange);
     }
@@ -3867,6 +3875,7 @@ private:
     double gameplaySinceS = 0.0;
 
     mk64vr::FirstPersonControls firstPersonControls;
+    mk64vr::HeldItemAttachment firstPersonAttachment;
     CameraSmoother seatSmoother;
     Mat4 firstPersonView, firstPersonKartCorrection;
     bool firstPersonKartAnchored=false;

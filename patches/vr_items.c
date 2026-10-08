@@ -15,13 +15,16 @@ extern void recomp_mk64_vr_interaction(Mk64VRInteraction* state);
 extern int recomp_vr_is_active(void);
 Mk64VRInteraction mk64_vr_interaction;
 static int held_index = -1, held_type;
+static int held_local_valid;
+static float held_local[3];
+static void forget_held(void) { held_index=-1; held_local_valid=0; }
 static volatile unsigned char rear_red[ACTOR_LIST_SIZE];
 
 static int held_valid(void) {
     if (held_index < 0) return 0;
     struct Actor* actor = &gActorList[held_index];
     if (!(actor->flags & 0x8000) || actor->type != held_type || actor->state != 0) {
-        held_index=-1; return 0;
+        forget_held(); return 0;
     }
     return 1;
 }
@@ -32,11 +35,28 @@ static void seat_vector(float out[3], const float in[3]) {
     out[0]=-in[0]; out[1]=in[1]; out[2]=-in[2];
     func_802B64C4(out, gPlayers[0].rotation[1]+gPlayers[0].unk_0C0);
 }
+static void cache_native_attachment(struct Actor* actor) {
+    // A trusted take may reach simulation after the next hand sample became invalid.
+    // Start from the native spawn's safe held point, never the invalid zero pose.
+    float local[3];
+    for(int i=0;i<3;i++) local[i]=actor->pos[i]-gPlayers[0].pos[i];
+    func_802B64C4(local,-(gPlayers[0].rotation[1]+gPlayers[0].unk_0C0));
+    held_local[0]=-local[0];
+    held_local[1]=local[1]-mk64_vr_interaction.seat_height;
+    held_local[2]=-local[2]+mk64_vr_interaction.seat_forward;
+    held_local_valid=1;
+}
 static void hand_position(struct Actor* actor) {
     int hand=mk64_vr_interaction.item_hand;
-    if (hand < 0 || hand > 1 || !mk64_vr_interaction.hand_valid[hand]) return;
+    if (hand >= 0 && hand <= 1 && mk64_vr_interaction.hand_valid[hand]) {
+        for(int i=0;i<3;i++) held_local[i]=mk64_vr_interaction.hand_pos[hand][i];
+        held_local_valid=1;
+    }
+    // Tracking loss is not a release: retain the last trusted seat-local point,
+    // then reapply the current kart transform each native tick.
+    if (!held_local_valid) return;
     float local[3], world[3];
-    for(int i=0;i<3;i++) local[i]=mk64_vr_interaction.hand_pos[hand][i];
+    for(int i=0;i<3;i++) local[i]=held_local[i];
     local[1]+=mk64_vr_interaction.seat_height;
     local[2]-=mk64_vr_interaction.seat_forward;
     seat_vector(world,local);
@@ -46,7 +66,7 @@ static void hand_position(struct Actor* actor) {
 void mk64_vr_tick(void) {
     recomp_mk64_vr_interaction(&mk64_vr_interaction);
     const int race = gGamestate==4 && gActiveScreenMode==0 && !gDemoMode && gCourseTimer>0;
-    if (!race) { held_index=-1; for(int i=0;i<ACTOR_LIST_SIZE;i++) rear_red[i]=0; return; }
+    if (!race) { forget_held(); for(int i=0;i<ACTOR_LIST_SIZE;i++) rear_red[i]=0; return; }
     if (!recomp_vr_is_active() || !mk64_vr_interaction.enabled || gIsGamePaused) return;
     Player* player=&gPlayers[0];
     if (mk64_vr_interaction.command==1 && !held_valid()) {
@@ -58,7 +78,7 @@ void mk64_vr_tick(void) {
         if(player->currentItemCopy==ITEM_GREEN_SHELL) index=use_green_shell_item(player);
         if(player->currentItemCopy==ITEM_RED_SHELL) index=use_red_shell_item(player);
         if(player->currentItemCopy==ITEM_BANANA) index=use_banana_item(player);
-        if(index>=0) { held_index=index; held_type=gActorList[index].type; rear_red[index]=0; consume_item(0);
+        if(index>=0) { held_local_valid=0; held_index=index; held_type=gActorList[index].type; cache_native_attachment(&gActorList[index]); rear_red[index]=0; consume_item(0);
             recomp_printf("[vr-item] held type=%d hand=%d actor=%d address=%08x\n",held_type,mk64_vr_interaction.item_hand,held_index,(unsigned)&gActorList[index]); }
     }
     if (!held_valid()) return;
@@ -95,7 +115,7 @@ void mk64_vr_tick(void) {
         func_800C90F4(0,(player->characterId*0x10)+SOUND_ARG_LOAD(0x29,0x00,0x80,0x00));
     }
     recomp_printf("[vr-item] release type=%d rear=%d velocity=%.3f,%.3f,%.3f actor=%d\n",held_type,mk64_vr_interaction.rear,actor->velocity[0],actor->velocity[1],actor->velocity[2],held_index);
-    held_index=-1;
+    forget_held();
 }
 
 // Compile the authoritative native state machines verbatim under private names.
@@ -146,7 +166,7 @@ RECOMP_PATCH void update_actor_red_blue_shell(struct ShellActor* shell) {
 // Native destruction path; clear tracked ownership before the slot can be reused.
 RECOMP_PATCH void destroy_actor(struct Actor* actor) {
     int vr_index=actor-gActorList;
-    if (held_index==vr_index) held_index=-1;
+    if (held_index==vr_index) forget_held();
     if (vr_index>=0 && vr_index<ACTOR_LIST_SIZE) rear_red[vr_index]=0;
 
     play_sound_before_despawn(actor);
@@ -158,7 +178,7 @@ RECOMP_PATCH void destroy_actor(struct Actor* actor) {
 // Native destruction path; clear tracked ownership before the slot can be reused.
 RECOMP_PATCH void destroy_destructable_actor(struct Actor* actor) {
     int vr_index=actor-gActorList;
-    if (held_index==vr_index) held_index=-1;
+    if (held_index==vr_index) forget_held();
     if (vr_index>=0 && vr_index<ACTOR_LIST_SIZE) rear_red[vr_index]=0;
 
     struct ShellActor* shell;

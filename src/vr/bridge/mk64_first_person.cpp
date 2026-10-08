@@ -50,6 +50,16 @@ FirstPersonOutput FirstPersonControls::update(const HandSample hands[2], bool ac
     out.angle=wheelAngle; out.steering=count>0; out.steer=wheelAngle/c.maxTurn; out.itemHand=releaseHand>=0?releaseHand:holder;
     return out;
 }
+void HeldItemAttachment::update(bool held, int hand, bool tracked, Vec3 position) {
+    if(!held) { valid=false; return; }
+    if(hand>=0 && hand<2 && tracked) { local=position; valid=true; }
+}
+bool HeldItemAttachment::transform(Mat4& model, const Mat4& seatView) const {
+    if(!valid)return false;
+    const Vec3 world=transformPoint(local,rigidInverse(seatView));
+    model.m[3][0]=world.x;model.m[3][1]=world.y;model.m[3][2]=world.z;
+    return true;
+}
 Pose seatPose(Vec3 p, float heading, float height, float forward) {
     Pose seat{quatFromYaw(heading),p};
     seat.p=add(p,quatRotate(seat.q,{0,height,-forward})); return seat;

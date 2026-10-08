@@ -19,7 +19,7 @@ for p in (ROOT/'RecompiledFuncs').glob('funcs_*.c'):
         if k not in allfunc:allfunc[k]=v
 native={'use_green_shell_item','use_red_shell_item','use_banana_item','add_actor_to_empty_slot','actor_init',
         'vec3f_copy_return','vec3s_copy','func_802B64C4','mtxf_translate_vec3f_mat3','copy_collision'}
-roots=['mk64_vr_tick','mk64_vr_held_item','update_actor_green_shell','update_actor_red_blue_shell','update_actor_banana','destroy_actor']
+roots=['mk64_vr_tick','mk64_vr_held_item','update_actor_green_shell','update_actor_red_blue_shell','update_actor_banana','destroy_actor','destroy_destructable_actor']
 selected={k:allfunc[k] for k in roots};pending=list(selected)
 while pending:
     for name in re.findall(r'\b(\w+)\(rdram, ctx\)',selected[pending.pop()]):
@@ -31,7 +31,7 @@ external-=selected.keys()
 symbols={s['name']:s['vram'] for section in tomllib.loads((ROOT/'MarioKart64RecompSyms/mk64.us.datasyms.toml').read_text())['section'] for s in section.get('symbols',[])}
 for line in (ROOT/'patches/patches.map').read_text().splitlines():
     f=line.split()
-    if len(f)==5 and f[-1] in ['held_index','held_type','rear_red']:symbols[f[-1]]=int(f[0],16)
+    if len(f)==5 and f[-1] in ['held_index','held_type','held_local_valid','rear_red']:symbols[f[-1]]=int(f[0],16)
 source=r'''
 #include "recomp.h"
 #include "mk64_first_person.h"
@@ -66,7 +66,7 @@ static void* checked(uint8_t* ram,gpr address,unsigned size,unsigned swap){
 #define F(a,o) (*(float*)checked(rdram,S32(a)+(o),4,0))
 '''
 for k,v in symbols.items():
-    if k in ['gPlayers','gPlayerOne','gActorList','gNumActors','gGamestate','gActiveScreenMode','gDemoMode','gCourseTimer','gIsGamePaused','gCourseMinX','gCourseMinY','gCourseMinZ','gCourseMaxX','gCourseMaxY','gCourseMaxZ','gModeSelection','gPlayerPositionLUT','held_index','held_type','rear_red']:
+    if k in ['gPlayers','gPlayerOne','gActorList','gNumActors','gGamestate','gActiveScreenMode','gDemoMode','gCourseTimer','gIsGamePaused','gCourseMinX','gCourseMinY','gCourseMinZ','gCourseMaxX','gCourseMaxY','gCourseMaxZ','gModeSelection','gPlayerPositionLUT','held_index','held_type','held_local_valid','rear_red']:
         source+=f'#define A_{k} 0x{v:08x}u\n'
 stubs={
 'recomp_vr_is_active':'ctx->r2=1;',
@@ -121,6 +121,36 @@ int main(int argc,char** argv){
             else assert(MEM_H(S32(A_gActorList),6)!=2); // native forward homing/path transition retained
         }
     }
+    // Actual native attachment stays in seat coordinates through invalid samples,
+    // translation and 90-degree kart turn. Zeroed invalid poses are not new targets.
+    for(int item=1;item<=5;item+=2) {
+        init(rdram);MEM_H(S32(A_gPlayers),0x10)=item;
+        command.hand_pos[1][0]=2;command.hand_pos[1][1]=-1;command.hand_pos[1][2]=-3;
+        command.command=1;call(rdram,mk64_vr_tick,0);
+        assert(MEM_BU(S32(A_held_local_valid),0)==1);
+        assert(fabs(F(A_gActorList,0x18)+2)<.001 && fabs(F(A_gActorList,0x1c)-5)<.001 && fabs(F(A_gActorList,0x20)-3)<.001);
+        command.hand_valid[1]=0;memset(command.hand_pos,0,sizeof command.hand_pos);command.command=3;
+        F(A_gPlayers,0x14)=100;F(A_gPlayers,0x18)=20;F(A_gPlayers,0x1c)=-50;
+        MEM_H(S32(A_gPlayers),0x2e)=0x4000;
+        call(rdram,mk64_vr_tick,0);
+        assert(MEM_W(S32(A_held_index),0)==0 && MEM_H(S32(A_gActorList),6)==0);
+        assert(fabs(F(A_gActorList,0x18)-97)<.001 && fabs(F(A_gActorList,0x1c)-25)<.001 && fabs(F(A_gActorList,0x20)+52)<.001);
+        F(A_gPlayers,0x14)=200;call(rdram,mk64_vr_tick,0);
+        assert(fabs(F(A_gActorList,0x18)-197)<.001 && MEM_H(S32(A_gActorList),6)==0);
+        call(rdram,item==1?destroy_destructable_actor:destroy_actor,A_gActorList);
+        assert(MEM_W(S32(A_held_index),0)==-1 && MEM_BU(S32(A_held_local_valid),0)==0);
+        // Destructable banana first enters its native death animation; finish its
+        // normal deallocation before requiring reuse of the exact same slot.
+        if(item==1)call(rdram,destroy_actor,A_gActorList);
+        // Reusing the exact slot/type must not resurrect an old local attachment.
+        MEM_H(S32(A_gPlayers),0x10)=item;command.command=1;call(rdram,mk64_vr_tick,0);
+        assert(MEM_BU(S32(A_held_local_valid),0)==1);
+        // Invalid pending take uses this new native spawn point, then follows the kart.
+        float freshX=F(A_gActorList,0x18),freshY=F(A_gActorList,0x1c),freshZ=F(A_gActorList,0x20);
+        assert(fabs(freshX-197)>.01 || fabs(freshY-25)>.01 || fabs(freshZ+52)>.01);
+        F(A_gPlayers,0x14)+=50;call(rdram,mk64_vr_tick,0);
+        assert(fabs(F(A_gActorList,0x18)-freshX-50)<.001 && MEM_H(S32(A_gActorList),6)==0);
+    }
     // Pause/cancel keeps the actor and does not launch; native destruction clears ownership
     // before even the same actor type/slot can be reused.
     init(rdram);MEM_H(S32(A_gPlayers),0x10)=3;command.command=1;call(rdram,mk64_vr_tick,0);
@@ -128,7 +158,7 @@ int main(int argc,char** argv){
     call(rdram,destroy_actor,A_gActorList);assert(MEM_W(S32(A_held_index),0)==-1);
     MEM_H(S32(A_gActorList),0)=7;MEM_H(S32(A_gActorList),2)=0xD000;MEM_H(S32(A_gActorList),6)=0;
     assert(MEM_W(S32(A_held_index),0)==-1);
-    puts("PASS native MIPS item spawn/consume/registration, quiet/forward/rear release, red post-30-tick behavior, cancellation and destruction ownership");
+    puts("PASS native MIPS item spawn/consume/registration, quiet/forward/rear release, red post-30-tick behavior, cancellation, invalid-tracking moving/turning attachment and destruction cache ownership");
     free(rdram);
 }
 '''

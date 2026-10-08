@@ -79,7 +79,8 @@ step_abi() {
 step_smoke() {
 	out="$build/package/MarioKart64Recompiled"
 	test -x "$out/LAUNCH-STEAM-FRAME.sh" || { echo "run package first" >&2; exit 1; }
-	data="$(mktemp -d "$build/smoke.XXXXXX")"
+	# The launcher changes into the package directory; its app-data path must stay absolute.
+	data="$(mktemp -d "$PWD/$build/smoke.XXXXXX")"
 	trap 'rm -rf "$data"' EXIT
 	mkdir -p "$data/home"
 	if [[ -n "${ROM_FILE:-}" ]]; then

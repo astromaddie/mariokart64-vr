@@ -426,6 +426,9 @@ valid release followed by a fresh valid grip. An invalid sample's zero squeeze
 cannot rearm a throw. Actor destruction and conventional item use clear tracked
 ownership before an actor slot can be reused. Mode changes also disarm gestures,
 retain the item and reset camera history.
+While tracking is invalid, the item retains its last trusted seat-local attachment
+and follows kart movement and turning. A delayed pickup without a trusted hand pose
+starts at the native held position; invalid zero poses cannot replace it.
 
 Eight host suites pass, including production grip latching, clockwise steering,
 quiet/forward/rear releases, invalid-tracking recovery, View tap/hold routing and
