@@ -139,7 +139,11 @@ void mk64_native_red_collision(struct ShellActor* shell);
 #include "../lib/mk64/src/actors/banana/update.inc.c"
 #undef update_actor_banana
 static int retained(struct Actor* actor) {
-    return mk64_vr_interaction.enabled && held_valid() && actor==&gActorList[held_index];
+    if (!mk64_vr_interaction.enabled || !held_valid() || actor!=&gActorList[held_index]) return 0;
+    // The ordinary item button releases native held actors on its off edge.
+    // Hand ownership must yield before the stock handler consumes that edge.
+    if (gControllers[0].buttonDepressed & Z_TRIG) { forget_held(); return 0; }
+    return 1;
 }
 RECOMP_PATCH void update_actor_green_shell(struct ShellActor* shell) {
     if(retained((struct Actor*)shell)) return;

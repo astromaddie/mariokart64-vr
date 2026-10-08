@@ -66,7 +66,7 @@ static void* checked(uint8_t* ram,gpr address,unsigned size,unsigned swap){
 #define F(a,o) (*(float*)checked(rdram,S32(a)+(o),4,0))
 '''
 for k,v in symbols.items():
-    if k in ['gPlayers','gPlayerOne','gActorList','gNumActors','gGamestate','gActiveScreenMode','gDemoMode','gCourseTimer','gIsGamePaused','gCourseMinX','gCourseMinY','gCourseMinZ','gCourseMaxX','gCourseMaxY','gCourseMaxZ','gModeSelection','gPlayerPositionLUT','held_index','held_type','held_local_valid','rear_red']:
+    if k in ['gPlayers','gPlayerOne','gControllers','gActorList','gNumActors','gGamestate','gActiveScreenMode','gDemoMode','gCourseTimer','gIsGamePaused','gCourseMinX','gCourseMinY','gCourseMinZ','gCourseMaxX','gCourseMaxY','gCourseMaxZ','gModeSelection','gPlayerPositionLUT','held_index','held_type','held_local_valid','rear_red']:
         source+=f'#define A_{k} 0x{v:08x}u\n'
 stubs={
 'recomp_vr_is_active':'ctx->r2=1;',
@@ -151,6 +151,17 @@ int main(int argc,char** argv){
         F(A_gPlayers,0x14)+=50;call(rdram,mk64_vr_tick,0);
         assert(fabs(F(A_gActorList,0x18)-freshX-50)<.001 && MEM_H(S32(A_gActorList),6)==0);
     }
+    // The existing item button releases a tracked item through its real native
+    // held-state handler, consuming the off edge and clearing VR ownership once.
+    for(int item=1;item<=5;item+=2) {
+        init(rdram);MEM_H(S32(A_gPlayers),0)=0xC000;
+        MEM_H(S32(A_gPlayers),0x10)=item;command.command=1;call(rdram,mk64_vr_tick,0);
+        MEM_H(S32(A_gControllers),8)=0x2000;
+        call(rdram,item==1?update_actor_banana:item==3?update_actor_green_shell:update_actor_red_blue_shell,A_gActorList);
+        assert(MEM_W(S32(A_held_index),0)==-1 && MEM_BU(S32(A_held_local_valid),0)==0);
+        assert(MEM_H(S32(A_gActorList),6)==1 && !(MEM_HU(S32(A_gControllers),8)&0x2000));
+        assert(consumed==1);
+    }
     // Pause/cancel keeps the actor and does not launch; native destruction clears ownership
     // before even the same actor type/slot can be reused.
     init(rdram);MEM_H(S32(A_gPlayers),0x10)=3;command.command=1;call(rdram,mk64_vr_tick,0);
@@ -158,7 +169,7 @@ int main(int argc,char** argv){
     call(rdram,destroy_actor,A_gActorList);assert(MEM_W(S32(A_held_index),0)==-1);
     MEM_H(S32(A_gActorList),0)=7;MEM_H(S32(A_gActorList),2)=0xD000;MEM_H(S32(A_gActorList),6)=0;
     assert(MEM_W(S32(A_held_index),0)==-1);
-    puts("PASS native MIPS item spawn/consume/registration, quiet/forward/rear release, red post-30-tick behavior, cancellation, invalid-tracking moving/turning attachment and destruction cache ownership");
+    puts("PASS native MIPS item spawn/consume/registration, quiet/forward/rear release, red post-30-tick behavior, cancellation, invalid-tracking moving/turning attachment, conventional item release and destruction cache ownership");
     free(rdram);
 }
 '''
