@@ -53,6 +53,10 @@ PY
 
 step_build() {
 	test -d RecompiledFuncs || { echo "run the recomp step first" >&2; exit 1; }
+	# Finish MIPS compilation before Ninja checks generated native patch timestamps.
+	# Otherwise its make-backed PatchesBin target can update patches.elf after
+	# Ninja has already decided to reuse the previous recompiled patch sources.
+	make -C patches CC=clang-15 LD=ld.lld-15 -j "$jobs"
 	cmake -S . -B "$build" -GNinja \
 		-DCMAKE_BUILD_TYPE="$type" \
 		-DCMAKE_C_COMPILER=clang-15 -DCMAKE_CXX_COMPILER=clang++-15 \

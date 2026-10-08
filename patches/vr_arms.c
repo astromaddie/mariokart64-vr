@@ -6,6 +6,7 @@
 #include "../include/mk64_arm_rig.h"
 #include "../include/mk64_visual_assets.h"
 extern const Mk64VisualAssets* mk64_vr_visual_assets(void);
+extern int mk64_diag_racers_enabled;
 extern Mk64VRInteraction mk64_vr_interaction;
 extern int recomp_vr_is_active(void);
 extern Vec3s sOriginalPosAnimation;
@@ -129,10 +130,15 @@ RECOMP_PATCH void render_limb_or_add_mtx(Armature* arg0, s16* arg1, AnimationLim
     }
 }
 
-// A small untextured steering rim. Source kart geometry remains in Amped's draw.
+// The authored wheel and fallback rim share the same interactive transform.
 // The same display-time wheel centre/radius/angle drives hit-testing and this group.
 void mk64_vr_draw_wheel(void) {
     if(!first_person_draw()) return;
+    const Mk64VisualAssets* assets=mk64_vr_visual_assets();
+    u32 wheel=assets ? assets->wheel : 0;
+    if(!assets || !(assets->flags & MK64_VISUAL_COCKPIT) ||
+        wheel<(MK64_VISUAL_ASSET_ADDRESS & 0xFFFFFF)+sizeof(*assets) ||
+        wheel>(assets->end & 0xFFFFFF)-8 || (wheel&7))wheel=0;
     static Vtx rim[32], spokes[12]; static int ready;
     if(!ready) {
         for(int i=0;i<16;i++) {
@@ -167,6 +173,16 @@ void mk64_vr_draw_wheel(void) {
     gSPSetGeometryMode(gDisplayListHead++,G_ZBUFFER|G_SHADE|G_SHADING_SMOOTH);
     gDPSetCombineMode(gDisplayListHead++,G_CC_SHADE,G_CC_SHADE);
     gDPSetRenderMode(gDisplayListHead++,G_RM_AA_ZB_OPA_SURF,G_RM_AA_ZB_OPA_SURF2);
+    if(wheel) {
+        gSPClearGeometryMode(gDisplayListHead++,G_TEXTURE_GEN|G_TEXTURE_GEN_LINEAR);
+        gDPSetTextureLUT(gDisplayListHead++,G_TT_NONE);
+        gDPSetCycleType(gDisplayListHead++,G_CYC_1CYCLE);
+        gDPSetAlphaCompare(gDisplayListHead++,G_AC_NONE);
+        gDPSetTextureFilter(gDisplayListHead++,G_TF_BILERP);
+        gSPTexture(gDisplayListHead++,0xFFFF,0xFFFF,0,G_TX_RENDERTILE,G_ON);
+        gDPSetCombineMode(gDisplayListHead++,G_CC_MODULATEIA,G_CC_MODULATEIA);
+        gSPDisplayList(gDisplayListHead++,(Gfx*)wheel);
+    } else {
     gSPVertex(gDisplayListHead++,rim,32,0);
     for(int i=0;i<16;i++) {
         int j=(i+1)&15;
@@ -176,6 +192,7 @@ void mk64_vr_draw_wheel(void) {
     for(int spoke=0;spoke<3;spoke++) {
         int v=spoke*4;
         gSP2Triangles(gDisplayListHead++,v,v+1,v+2,0,v+1,v+3,v+2,0);
+    }
     }
     gSPPopMatrix(gDisplayListHead++,G_MTX_MODELVIEW);
     gEXPopCombineMode(gDisplayListHead++);
@@ -191,6 +208,13 @@ void mk64_vr_draw_wheel(void) {
 void mk64_vr_finish_kart(Gfx* start) {
     if(!first_person_draw())return;
     const Mk64VisualAssets* assets=mk64_vr_visual_assets();
+    static int gate_logged;
+    if(mk64_diag_racers_enabled && !gate_logged) {
+        const Mk64VisualAssets* raw=(const Mk64VisualAssets*)MK64_VISUAL_ASSET_ADDRESS;
+        recomp_printf("[vr-assets] cockpit gate valid=%d magic=%08x version=%u flags=%u end=%08x root0=%08x commands=%d\n",
+            assets!=0,raw->magic,raw->version,raw->flags,raw->end,raw->cockpit[0],gDisplayListHead-start);
+        gate_logged=1;
+    }
     if(!assets || !(assets->flags & MK64_VISUAL_COCKPIT))return;
     int character=gPlayers[0].characterId;
     if(character<0 || character>=8)return;

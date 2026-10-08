@@ -832,6 +832,20 @@ def hydrate_model_packages(
         "reachable_g_settimg": metrics["g_settimg"],
     })
 
+    # The frontend asynchronously clears two startup framebuffers in this range.
+    # Required racer/item commands, vertices and textures must never alias it.
+    startup_start, startup_end = 0x80700000, 0x8074B000
+    graph_ranges = [(address, address + 8) for address in unique_commands]
+    for address in unique_vertex_commands:
+        w0, w1 = struct.unpack_from(">II", hydrated, address - segment_ram_start)
+        graph_ranges.append((w1 | 0x80000000, (w1 | 0x80000000) + ((w0 >> 10) & 63) * 16))
+    for address in unique_texture_commands:
+        _, w1 = struct.unpack_from(">II", hydrated, address - segment_ram_start)
+        # A full TMEM load is a conservative bound for these validated CI/RGBA maps.
+        graph_ranges.append((w1 | 0x80000000, (w1 | 0x80000000) + 4096))
+    if any(begin < startup_end and end > startup_start for begin, end in graph_ranges):
+        raise ImportError("required visual graph overlaps frontend startup framebuffers")
+
     missing_armature_roots = sorted({root["address"] for root in model_display_list_roots} - unique_display_lists)
     if missing_armature_roots:
         raise ImportError("untraversed animated-model roots: " + ", ".join(f"0x{x:08X}" for x in missing_armature_roots))
@@ -869,6 +883,8 @@ def hydrate_model_packages(
         },
         "reachable_graph": {
             "display_lists": len(unique_display_lists),
+            "required_visual_end": f"0x{max(end for _, end in graph_ranges):08X}",
+            "startup_framebuffers_disjoint": True,
             "unique_command_addresses": len(unique_commands),
             "unique_g_vtx_commands": len(unique_vertex_commands),
             "unique_g_vtx_local_relocations": len(unique_local_vertex_commands),

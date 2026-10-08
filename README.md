@@ -3,8 +3,11 @@
 This branch adds optional native standalone Steam Frame VR through OpenXR on Linux ARM64.
 Build with `MK64_VR=ON`; flat mode remains the default. See [the VR architecture and validation](docs/VR_ARCHITECTURE.md)
 and [the native build script](tools/docker/build-linux.sh). The original game ROM is required.
-The [private Amped Up racer importer](docs/AMPED_UP.md) adds its 3D racers as a recomp mod
-while retaining the original courses and cups. It requires the official v3.21 patch locally.
+The [private Amped Up importer](docs/AMPED_UP.md) adds its 3D racers, green/red shells
+and bananas while retaining the original courses and cups. It requires the official
+v3.21 patch locally. The optional supplied kart provides a close-up first-person
+cockpit with the eight character colours and an interactive steering wheel;
+chase view and other racers keep their existing karts.
 Measurements at 2160×2160 per eye and 120 Hz, plus the Frame's per-title settings, are in
 [Frame performance](docs/FRAME_PERFORMANCE.md).
 The optional [first-person controls](docs/VR_ARCHITECTURE.md#first-person-controls) use

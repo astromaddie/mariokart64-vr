@@ -6,19 +6,20 @@ from import_kart import BASE, MAGIC, CHARACTERS, build_extension, parse_dae, png
 
 p=argparse.ArgumentParser(description=__doc__);p.add_argument('--kart-source',type=Path,required=True);args=p.parse_args()
 b,report=build_extension(args.kart_source)
-magic,version,flags,end,*roots=struct.unpack_from('>12I',b)
-assert (magic,version,flags)==(MAGIC,1,3) and end==BASE+len(b)<=0x80800000
+magic,version,flags,end,*entries=struct.unpack_from('>14I',b)
+roots=entries[:8];wheel=entries[8]
+assert (magic,version,flags)==(MAGIC,2,3) and end==BASE+len(b)<=0x80800000
 assert report['source_triangles']==6370 and report['triangles']==6014
 assert len(report['parts'])==9 and 'steeringwheel' not in report['parts']
 assert len(set(roots))==8
 assert report['textures']['tyre.png']['n64_size']==[32,64]
 assert report['seat_bounds'][1][1]<-.2 # no imported hull over the seated eye
 geometry=[]; palettes=[]
-for character,root in enumerate(roots):
+for character,root in enumerate(roots+[wheel]):
     cache={};drawn=[];images=[];loads=[]
     def read(address,size):
         offset=(address|0x80000000)-BASE
-        assert offset>=48 and offset+size<=len(b),f'out of payload {address:x}'
+        assert offset>=56 and offset+size<=len(b),f'out of payload {address:x}'
         return b[offset:offset+size]
     def walk(address,depth=0):
         assert depth<=2
@@ -40,7 +41,12 @@ for character,root in enumerate(roots):
                 assert count<=2048
         raise AssertionError('unterminated emitted graph')
     walk(root)
-    assert len(drawn)==6014
+    assert len(drawn)==(356 if character==8 else 6014)
+    if character==8:
+        positions=[v[:3] for t in drawn for v in t]
+        assert min(v[0] for v in positions)==-100 and max(v[0] for v in positions)==100
+        assert max(v[1] for v in positions)<=101 and min(v[1] for v in positions)>=-101
+        continue
     # UVs, native vertex coordinates and shade widths are identical across all colors.
     geometry.append(hashlib.sha256(repr(drawn).encode()).hexdigest());palettes.append(loads)
     assert len(set(loads))>=5
@@ -48,5 +54,11 @@ assert len(set(geometry))==1
 assert len({tuple(p) for p in palettes})==8
 # The no-kart option still provides the Amped items and cannot activate a cockpit.
 fallback,metadata=build_extension(None)
-assert struct.unpack_from('>12I',fallback)==(MAGIC,1,1,BASE+48,*([0]*8))
+assert struct.unpack_from('>14I',fallback)==(MAGIC,2,1,BASE+56,*([0]*10))
 print(f'PASS private graph: all 8 palettes, {report["triangles"]} triangles each, shared geometry {geometry[0]}, {len(b)} bytes; missing-kart fallback')
+
+# Simulate both asynchronous startup framebuffer clears after mod copying.
+# The new descriptor and all emitted meshes/textures are outside that range.
+assert BASE >= 0x80700000 + 2*320*240*2
+assert report['wheel_triangles']==356
+print('PASS startup framebuffer separation and separate 356-triangle dynamic authored wheel')

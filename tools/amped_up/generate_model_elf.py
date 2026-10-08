@@ -8,7 +8,7 @@ import hashlib
 import json
 import struct
 import tomllib
-from import_kart import build_extension
+from import_kart import BASE as VISUAL_BASE, build_extension
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -42,8 +42,12 @@ def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_
         raise GenerationError("item roots must be hydrated and validated before publishing the asset descriptor")
     extension, visual_report = build_extension(kart_source)
     payload_path=assembly_path.with_suffix(".assets.bin")
-    payload_path.write_bytes(segment+extension)
-    payload_words=(len(segment)+len(extension))//4
+    # Keep the trailer clear of the frontend's two asynchronous startup buffers.
+    padding=VISUAL_BASE-(ram_start+len(segment))
+    if padding<0:raise GenerationError("visual trailer overlaps the original segment")
+    payload=segment+bytes(padding)+extension
+    payload_path.write_bytes(payload)
+    payload_words=len(payload)//4
     payload_path.with_suffix(".json").write_text(json.dumps(visual_report,indent=2)+"\n")
 
     functions = config["code_functions"]

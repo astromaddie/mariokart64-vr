@@ -1,5 +1,9 @@
 # Steam Frame performance measurements
 
+These measurements precede the supplied close-up kart and 3D item import. The
+new visuals use the saved 2160×2160/120 Hz profile; these earlier timings do not
+establish their frame rate.
+
 ## Revised standard/full-detail racers
 
 The native application built from `f1ee10c450d91fdeb0d79e19c3691e2d00623bb7`

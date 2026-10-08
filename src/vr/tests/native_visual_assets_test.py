@@ -9,8 +9,9 @@ from test_animation_runtime import functions
 patch=functions((ROOT/'RecompiledPatches/patches.c').read_text());allfunc=dict(patch)
 for path in (ROOT/'RecompiledFuncs').glob('funcs_*.c'):
     for k,v in functions(path.read_text()).items():allfunc.setdefault(k,v)
-roots=['mk64_vr_finish_kart','mk64_vr_render_item']
+roots=['mk64_vr_finish_kart','mk64_vr_render_item','mk64_vr_draw_wheel']
 stubs={
+'recomp_printf':'',
 'recomp_vr_is_active':'ctx->r2=active;',
 'mk64_vr_item_is_held':'ctx->r2=held;',
 'is_within_render_distance':'ctx->f0.fl=distanceValue;',
@@ -81,9 +82,12 @@ static int has(uint8_t* rdram,unsigned word){
 int main(int argc,char**argv){
  assert(argc==3);uint8_t* rdram=calloc(1,0x2000000);
  load(rdram,argv[1],0x80801000);load(rdram,argv[2],0x80400000);
+ // A queued startup clear after the mod copy must not erase its descriptor or graphs.
+ memset(rdram+0x700000,0,2*320*240*2);
+ assert((unsigned)W(0x80750000,0)==0x4d4b5652);
  W(A_gPlayerOne,0)=A_gPlayers;W(A_camera1,0)=0x80390000;
  H(A_gCourseMinY,0)=-1000;H(A_gCourseMaxY,0)=1000;
- const unsigned actor=0x80380000,start=0x80300000,assets=0x8072e3b0;
+ const unsigned actor=0x80380000,start=0x80300000,assets=0x80750000;
  for(int type=6;type<=8;type++)for(int holding=0;holding<2;holding++) {
   memset(checked(rdram,S32(actor),0x70,0),0,0x70);H(actor,0)=type;held=holding;
   F(actor,0x18)=10;F(actor,0x1c)=20;F(actor,0x20)=30;
@@ -109,7 +113,7 @@ int main(int argc,char**argv){
  // Corrupt descriptors must never suppress the prior kart or render item roots.
  for(int field=0;field<3;field++) {
   unsigned saved=W(assets,field==0?4:12);
-  W(assets,field==0?4:12)=field==0?2:(field==1?0x8072e3b0:0x80800008);
+  W(assets,field==0?4:12)=field==0?99:(field==1?0x80750000:0x80800008);
   W(A_gDisplayListHead,0)=start;call(rdram,mk64_vr_render_item,0x80390000,actor);
   assert((unsigned)W(A_gDisplayListHead,0)==start);
   W(assets,field==0?4:12)=saved;
@@ -142,7 +146,18 @@ int main(int argc,char**argv){
   assert((unsigned)W(A_gDisplayListHead,0)==start+8 && has(rdram,0x005aadf0));
   W(assets,16)=saved;
  }
- puts("PASS generated native visual hooks: item colors/scales/held tags/culling/fallback; local FP cockpit all 8 colors; chase/remote/missing-kart unchanged");
+ // Both authored and missing-wheel paths use the exact interactive wheel group.
+ for(int mode=0;mode<4;mode++) {
+  unsigned saved=W(assets,48);
+  if(mode==1)W(assets,48)=0;
+  if(mode==2)W(assets,48)=0xfffffff8u;
+  W(A_mk64_vr_local_draw,0)=mode!=3;
+  W(A_gDisplayListHead,0)=start;call(rdram,mk64_vr_draw_wheel,0,0);
+  if(mode==3)assert((unsigned)W(A_gDisplayListHead,0)==start);
+  else {assert(has(rdram,0x72000000));assert(has(rdram,saved)==(mode==0));}
+  W(assets,48)=saved;
+ }
+ puts("PASS startup clears preserve assets; authored/fallback wheel shared group; generated native visual hooks: item colors/scales/held tags/culling/fallback; local FP cockpit all 8 colors; chase/remote/missing-kart unchanged");
 }
 '''
 with tempfile.TemporaryDirectory(prefix='mk64-visual-hooks-') as d:

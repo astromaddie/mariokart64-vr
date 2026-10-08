@@ -184,11 +184,19 @@ device was unworn. The probe does not render game content and is not evidence of
 | Bridge/profile/retained-eye tests | Passed | Seven VR host suites, including production grid/roster, bounded head pose and display-list diagnostics; original sfvr checks retained |
 | Stereo gameplay and simulation parity | Verified unattended | Cardinal-view candidate matched all 68 common simulation samples at frames 630–2640; final package matched all 38 samples at 630–1740 and exited cleanly at 60s |
 | Viewport, HUD and full-course coverage | Luigi Raceway cardinal views and HUD inspected; broader coverage pending | Actual yaw 0/90/180/270 eye images and settled HUD; intro cinema transition confirmed; 0.05 m near-plane floor correction inspected separately |
-| Private Amped Up 3D racers | Standard/full-detail set installed and rendered | External NRM `26a3afd6…`; all eight native racers use 14 matrices with complete walks; 14 importer checks and 2,192 actual animation traversal cases pass |
-| 2160×2160 per eye at 120 Hz | Verified unattended on Luigi Raceway | Revised full-detail model package and LOW smoothing: clean 90s run, five settled windows at 120.0/s with zero misses, 3.10–3.69 ms both-eye GPU, 68/68 stock samples match. See [performance details](FRAME_PERFORMANCE.md). |
+| Private Amped Up 3D racers/items and close-up kart | Standard racers retained; new first-person Mario cockpit/wheel and held green shell/banana inspected on Frame | External v2 NRM `2baf8b2a…`; all eight kart palettes and local-only gates checked in source; two fresh native starts preserve the descriptor beyond startup framebuffers |
+| 2160×2160 per eye at 120 Hz | Verified unattended for the earlier full-detail racer package | Earlier LOW-smoothing run: five settled windows at 120.0/s with zero misses, 3.10–3.69 ms both-eye GPU, 68/68 stock samples match. New cockpit/item performance remains unmeasured. See [performance details](FRAME_PERFORMANCE.md). |
 | User headset play | Predecessor race completed; revised package retest pending | User reported the prioritized rendering issues after a completed race; revised native captures do not certify worn comfort or a full lap |
 
 ## Reproduction
+
+For visual iteration, build the changed native application, transfer it to the
+Frame and launch the Steam title promptly. Inspect the actual eye images before
+packaging; run targeted source checks to diagnose concrete failures. The Frame
+build script compiles the MIPS patches before Ninja checks generated native
+sources, so a patch edit reaches the executable in the same build invocation.
+Keep device captures distinct from worn acceptance and preserve the user profile
+around bounded diagnostics.
 
 Build with the same pinned native ARM64 image and verified ROM input:
 
@@ -407,9 +415,12 @@ so the arms retain the authored colours and textures. The added wheel saves and
 restores render state. Palm contacts sit 2.5 cm behind the grasp point (1.4 cm for
 Toad), with controller/item targets and hand width unchanged. Bone-axis extension
 is bounded at 2.5 times the source length. The wheel stays 28 cm forward and 28 cm
-below the seat anchor. The original kart remains, including the dark floorboard
-visible inside the wheel, and other racers render normally. The added steering
-rim shares its dimensions with grip hit-testing.
+below the seat anchor. With the optional private kart import, only the local
+first-person kart geometry is replaced by the supplied frame, seat, pedals,
+engine and tyres. Its frame/rim textures use each character's authored colours.
+The supplied steering-wheel mesh rotates with the same grip steering, anchor
+and hit-testing radius. Missing private assets retain the original kart and
+procedural wheel. Chase view and other racers retain their existing karts.
 
 Reusable prior art is F-Zero's vehicle seat anchor and Halo's
 `vr_drive_input` wheel mapping and `vr_solve_arm` two-bone solver. MK64 locates
@@ -438,11 +449,13 @@ While tracking is invalid, the item retains its last trusted seat-local attachme
 and follows kart movement and turning. A delayed pickup without a trusted hand pose
 starts at the native held position; invalid zero poses cannot replace it.
 
-Item artwork still comes from the retail renderer: green/red shells use sprites,
-and bananas use their original simple geometry. The official Amped Up v3.21 patch
-also contains 3D green/red-shell and banana models; those custom item renderers
-are separate from the racer renderer imported here. Local inspection evidence,
-tied to the ROM hash, is in
+The private importer now includes Amped Up's authored 3D green/red shells and
+banana display lists. Narrow visual hooks preserve the retail actor simulation
+and native visual scales. Held props follow trusted controller position and
+orientation in the moving seat frame; released props resume native transforms.
+Separate solid-item groups avoid the sprite billboard transform. Blue shells
+remain on their existing path. Older or absent private mods retain the retail
+visuals. Source inspection evidence, tied to the ROM hash, is in
 `build/amped_up/{green-shell,banana}-model-evidence.json`.
 
 Eight host suites pass, including production grip latching, clockwise steering,
@@ -456,14 +469,14 @@ passes native spawn/state/velocity/destruction checks and 35 ticks of rear red
 flight versus ordinary forward homing. Terrain and audio services are stubbed in
 that harness; these checks do not certify rendered or worn play.
 
-Source `c96cf7e` with RT64 `8e5e3907` passes complete ARM64 VR ON and flat OFF
+The first-person baseline, source `c96cf7e` with RT64 `8e5e3907`, passes complete ARM64 VR ON and flat OFF
 builds, package/ABI checks, and exact post-smoke payload inventories (42 VR files,
 41 flat), plus their generated build-provenance JSON sidecars.
 Both container UI smokes stay open until the expected timeout (124); they record
 a D-Bus assertion during teardown. Earlier intermittent smoke exits of 139 remain
 unlocated; a separate captured teardown abort does not establish their cause.
 
-Native Steam launches on the Frame pass 12 synthetic item cases: quiet, forward,
+That baseline's native Steam launches on the Frame pass 12 synthetic item cases: quiet, forward,
 rear and tracking-loss cases for each of banana, green shell and red shell.
 Stereo captures cover arm/material rendering across all eight racers. Six racers
 have front item-holding poses; Yoshi and Peach have rear-arm poses. Native logs
@@ -474,10 +487,11 @@ visible banana/green-shell flight. A fresh chase capture shows the complete loca
 racer/kart without the added wheel; an initially retrieved stale capture was
 rejected and preserved separately.
 
-With eye readback/captures disabled, the stationary first-person gesture run
+With eye readback/captures disabled, that baseline's stationary first-person gesture run
 holds 120.0 FPS at 2160 x 2160 per eye with zero missed frames in its settled
 windows and 2.98 to 3.79 ms stereo GPU time. These measurements do not establish
-moving-race or worn performance.
+moving-race or worn performance, or performance with the subsequently imported
+close-up kart and 3D props.
 
 The Frame's normal `MarioKart64VR` Steam entry now launches
 `LAUNCH-STEAM-FRAME.sh --game mk64` with the correct `MK64FrameVR` data folder.
@@ -497,3 +511,20 @@ Worn steering, physical throws, View-button operation, hand comfort and recovery
 remain untested. Local evidence is in ignored
 `build/first-person-evidence/` and
 `build-linux-vr-validation/first-person/candidate-c96cf7e/`.
+
+The subsequent private kart/item import was inspected on the Frame on
+2026-10-08. Two fresh Steam starts with the v2 trailer show the supplied Mario
+pipe frame, pedals, tyres and authored interactive wheel, plus a held green
+shell and banana in both eyes. Both starts report a valid descriptor after the
+asynchronous startup clears. The capture executable SHA256 is
+`75356017057c3f0cbaecafa698d64fb3f21d14560d3bb55706a33c85dcdad898`;
+the private NRM SHA256 is
+`2baf8b2aeb158d02e43ca2d56978df54ce9ae9966f885854f07ad7dfe55279be`.
+Evidence is under
+`build-linux-vr-validation/first-person/candidate-e9abc25/captures/v2-green-held-phase2/`
+and `captures/v2-banana-held/` beside it. Earlier invalid-descriptor captures
+remain preserved as failed candidates. The native production harness checks
+the wheel's shared steering transform/fallback, all eight cockpit palettes,
+chase/remote gates, item scales and red-shell colour; the remaining colours,
+physical wrist poses and released-prop appearance were not recaptured on the
+device. These screenshots do not establish worn comfort or performance.

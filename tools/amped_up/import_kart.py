@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Private COLLADA -> F3DEX cockpit. No asset bytes are checked into the repository.
 Source: fznmeatpopsicle, https://twitter.com/fznmeatpopsicle (credit required).
-The nine retained mesh nodes preserve every authored polygon, normal and UV.
-Only the separate steeringwheel node is omitted in favor of the approved VR rim.
+All ten source mesh nodes preserve their authored polygons, normals and UVs.
+The steering wheel has a separate dynamic root in the approved VR wheel basis.
 """
 from __future__ import annotations
 import hashlib
@@ -12,7 +12,9 @@ import struct
 import xml.etree.ElementTree as ET
 import zlib
 
-BASE = 0x8072E3B0
+# Ultramodern's asynchronous startup framebuffers occupy 80700000..8074B000.
+# Never place live mod assets in that range: queued clears can outlive mod init.
+BASE = 0x80750000
 MAGIC = 0x4D4B5652
 CHARACTERS = ('mario','luigi','yoshi','toad','dk','wario','peach','bowser')
 NS = {'c':'http://www.collada.org/2005/11/COLLADASchema'}
@@ -93,12 +95,12 @@ def parse_dae(path):
 
 
 def build_extension(source: Path | None):
-    blob=bytearray(48)
+    blob=bytearray(56)
     def append(data):
         while len(blob)%8:blob.append(0)
         address=BASE+len(blob);blob.extend(data);return address & 0xffffff
     def commands(words):return b''.join(struct.pack('>II',*word) for word in words)
-    roots=[0]*8; report={'credit':CREDIT,'cockpit':False,'items':True}
+    roots=[0]*8; wheel_root=0; report={'credit':CREDIT,'cockpit':False,'items':True}
     if source is not None:
         all_parts=[parse_dae(source/f'pipeframe64_{name}.dae') for name in CHARACTERS]
         def geometry(parts):return [(name,triangles) for name,texture,triangles in parts]
@@ -110,8 +112,21 @@ def build_extension(source: Path | None):
         centre=[(lo[i]+hi[i])/2 for i in range(3)]; size=.18/((hi[0]-lo[0])/2)
         if not 1<size<3:raise ValueError('unexpected authored wheel size')
         def point(v):return (size*(v[0]-centre[0]),size*(v[2]-centre[2])-.28,size*(v[1]-centre[1])-.28)
+        # Flatten the authored ring plane into wheel-local XY, preserving the
+        # shaft depth. Local radius 100 uses the same runtime wheel transform
+        # and hit-test radius as the previous procedural rim.
+        yy=sum((v[1]-centre[1])**2 for v in ring)
+        zz=sum((v[2]-centre[2])**2 for v in ring)
+        yz=sum((v[1]-centre[1])*(v[2]-centre[2]) for v in ring)
+        angle=.5*math.atan2(2*yz,yy-zz)
+        up=(math.cos(angle),math.sin(angle))
+        if up[1]<0:up=(-up[0],-up[1])
+        wheel_scale=100/((hi[0]-lo[0])/2)
+        def wheel_point(v):
+            x,y,z=(v[i]-centre[i] for i in range(3))
+            return (x*wheel_scale,(y*up[0]+z*up[1])*wheel_scale,(y*up[1]-z*up[0])*wheel_scale)
         textures={}; texture_reports={}
-        for texture in sorted({texture for parts in all_parts for name,texture,tris in parts if name!='steeringwheel'}):
+        for texture in sorted({texture for parts in all_parts for name,texture,tris in parts}):
             if Path(texture).name!=texture:raise ValueError('texture path escapes supplied source')
             w,h,rows=png_rgb(source/texture)
             # RGBA16 32x64 fits TMEM exactly, preserving the tyre's authored tread
@@ -129,20 +144,23 @@ def build_extension(source: Path | None):
                     r,g,b=(round(c/samples) for c in rgb);pixels.append(((r>>3)<<11)|((g>>3)<<6)|((b>>3)<<1)|1)
             textures[texture]=(append(struct.pack('>'+str(len(pixels))+'H',*pixels)),tw,th)
             texture_reports[texture]={'source_sha256':hashlib.sha256((source/texture).read_bytes()).hexdigest(),'source_size':[w,h],'n64_size':[tw,th]}
-        lists=[]; all_positions=[]; triangle_count=0
+        lists=[]; all_positions=[]; wheel_positions=[]; triangle_count=0; wheel_triangles=0
         light=(-.3,.85,.4); length=math.sqrt(sum(v*v for v in light));light=tuple(v/length for v in light)
         for name,texture,triangles in all_parts[0]:
-            if name=='steeringwheel':lists.append(0);continue
-            tw,th=textures[texture][1:]; words=[]; triangle_count+=len(triangles)
+            is_wheel=name=='steeringwheel'
+            tw,th=textures[texture][1:]; words=[]
+            if is_wheel:wheel_triangles+=len(triangles)
+            else:triangle_count+=len(triangles)
             for start in range(0,len(triangles),10):
                 chunk=triangles[start:start+10]; packed=b''
                 for triangle in chunk:
                     # Z-up -> Y-up swaps handedness. Reverse winding once.
                     for pos,normal,uv in (triangle[0],triangle[2],triangle[1]):
-                        p=point(pos);all_positions.append(p)
+                        p=wheel_point(pos) if is_wheel else point(pos)
+                        (wheel_positions if is_wheel else all_positions).append(p)
                         n=(normal[0],normal[2],normal[1]);nl=math.sqrt(sum(v*v for v in n))
                         shade=round(255*(.55+.45*max(0,sum(n[i]*light[i] for i in range(3))/max(nl,1e-8))))
-                        xyz=[round(v*1000) for v in p]
+                        xyz=[round(v*(1 if is_wheel else 1000)) for v in p]
                         st=[round(uv[0]*(tw-1)*32),round((1-uv[1])*(th-1)*32)]
                         if any(abs(v)>32767 for v in xyz+st):raise ValueError('vertex overflows N64 format')
                         packed+=struct.pack('>hhhHhhBBBB',*xyz,0,*st,shade,shade,shade,255)
@@ -152,23 +170,26 @@ def build_extension(source: Path | None):
                 for i in range(0,len(chunk),2):
                     words.append((0xB1000000|indices(i),indices(i+1)) if i+1<len(chunk) else (0xBF000000,indices(i)))
             words.append((0xB8000000,0));lists.append(append(commands(words)))
-        for character,parts in enumerate(all_parts):
+        def root_list(parts,wheel):
             words=[]
             for index,(name,texture,tris) in enumerate(parts):
-                if name=='steeringwheel':continue
+                if (name=='steeringwheel')!=wheel:continue
                 ptr,w,h=textures[texture];line=w*2//8
                 words.extend([(0xE7000000,0),(0xFD100000,ptr),(0xF5100000,0x07000000),
                     (0xE6000000,0),(0xF3000000,0x07000000|((w*h-1)<<12)|((2048+line-1)//line)),
                     (0xE7000000,0),(0xF5100000|(line<<9),(2<<18)|(2<<8)),
                     (0xF2000000,((w-1)*4<<12)|((h-1)*4)),(0x06000000,lists[index])])
-            words.append((0xB8000000,0));roots[character]=append(commands(words))
+            words.append((0xB8000000,0));return append(commands(words))
+        for character,parts in enumerate(all_parts):roots[character]=root_list(parts,False)
+        wheel_root=root_list(all_parts[0],True)
         report.update(cockpit=True,triangles=triangle_count,source_triangles=sum(len(t) for _,_,t in all_parts[0]),
             parts=sorted({name for name,_,_ in all_parts[0] if name!='steeringwheel'}),
             source_wheel_centre=centre,scale=size,seat_bounds=[[min(v[i] for v in all_positions),max(v[i] for v in all_positions)] for i in range(3)],
-            textures=texture_reports,roots=roots,
+            textures=texture_reports,roots=roots,wheel_root=wheel_root,wheel_triangles=wheel_triangles,
+            wheel_bounds=[[min(v[i] for v in wheel_positions),max(v[i] for v in wheel_positions)] for i in range(3)],
             sources={name:hashlib.sha256((source/f'pipeframe64_{name}.dae').read_bytes()).hexdigest() for name in CHARACTERS})
     while len(blob)%4:blob.append(0)
     if BASE+len(blob)>0x80800000:raise ValueError('private visual assets exceed reserved expansion RAM')
-    struct.pack_into('>12I',blob,0,MAGIC,1,1|(2 if source else 0),BASE+len(blob),*roots)
+    struct.pack_into('>14I',blob,0,MAGIC,2,1|(2 if source else 0),BASE+len(blob),*roots,wheel_root,0)
     report.update(bytes=len(blob),end=f'0x{BASE+len(blob):08X}',sha256=hashlib.sha256(blob).hexdigest())
     return bytes(blob),report
