@@ -16,7 +16,7 @@ heap_pool_end = "0x80242F00"
 static_noload_end = "0x803FFDB0"
 expansion_ram_end = "0x80800000"
 
-# Three eight-entry racer-model tables recovered from the patched binary.
+# Typed racer skeleton and animation tables recovered from the patched binary.
 [[tables]]
 name = "skeletons"
 ram_address = "0x805A4740"
@@ -25,7 +25,9 @@ entries = 8
 [[tables]]
 name = "animations"
 ram_address = "0x805A5400"
-entries = 8
+# Idle, left/right steering, podium and effect states selected by 805A6D30.
+# The table ends at 805A5488, where the first Animation structure begins.
+entries = 34
 
 [[raw_racer_colour_records]]
 ram_address = "0x805ADAC8"
@@ -215,7 +217,7 @@ kind = "armature"
 [[cpu_pointer_tables]]
 name = "animations"
 ram_address = "0x805A5400"
-entries = 8
+entries = 34
 kind = "animation"
 
 [[cpu_pointer_tables]]

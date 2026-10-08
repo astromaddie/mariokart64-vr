@@ -40,7 +40,7 @@ class AmpedImporterTests(unittest.TestCase):
             self.assertEqual(report["target_sha256"], config["rom"]["target_sha256"])
             self.assertEqual(report["segment_size"], "0x32E3B0")
             self.assertEqual(len(report["model_tables"]), 2)
-            self.assertEqual([len(table["pointers"]) for table in report["model_tables"]], [8, 8])
+            self.assertEqual([len(table["pointers"]) for table in report["model_tables"]], [8, 34])
             racer_records = report["raw_racer_colour_records"][0]["records_s16"]
             self.assertEqual(len(racer_records), 8)
             self.assertTrue(all(len(record) == 3 for record in racer_records))
@@ -84,7 +84,7 @@ class AmpedImporterTests(unittest.TestCase):
             self.assertEqual(hydration["external_armature_graph"]["g_vtx"], 4)
 
             cpu = hydration["cpu_pointer_hydration"]
-            self.assertEqual(cpu["animation_structures"], 9)
+            self.assertEqual(cpu["animation_structures"], 35)
             self.assertEqual(cpu["armature_structures"], 10)
             self.assertEqual(len(cpu["armature_model_roots"]), 60)
             self.assertEqual(
@@ -182,6 +182,14 @@ class AmpedImporterTests(unittest.TestCase):
             animation_cycle_array = 0x805A5488 + 16 - segment_base
             self.assertEqual(struct.unpack_from(">I", hydrated_segment, animation_angle_array)[0], 0x005A6200)
             self.assertEqual(struct.unpack_from(">I", hydrated_segment, animation_cycle_array)[0], 0x005A6188)
+            # The race helper selects beyond character-count entries: all 34
+            # Animation records and both nested operands must be stock-safe.
+            for index in range(34):
+                token = struct.unpack_from(">I", hydrated_segment, animation_table + index * 4)[0]
+                self.assertEqual(token >> 24, 0)
+                for field in (12, 16):
+                    nested = struct.unpack_from(">I", hydrated_segment, token + 0x80000000 - segment_base + field)[0]
+                    self.assertEqual(nested >> 24, 0)
             self.assertEqual(struct.unpack_from(">I", hydrated_segment, 0x805AA700 + 12 - segment_base)[0], 0x005AA748)
 
     def test_live_effect_rgb_addresses_for_all_players(self) -> None:
@@ -497,7 +505,7 @@ class AmpedImporterTests(unittest.TestCase):
             )
             assembly = (output / "amped_up_model.S").read_text(encoding="utf-8")
 
-        self.assertEqual(generated["function_count"], 13)
+        self.assertEqual(generated["function_count"], 14)
         self.assertEqual(generated["extracted_function_count"], 10)
         self.assertEqual(len(generated["function_definitions"]), len(set(generated["function_definitions"])))
         self.assertEqual(len(generated["code_patches"]), 15)
@@ -521,8 +529,13 @@ class AmpedImporterTests(unittest.TestCase):
         self.assertIn("srl $a1, $a1, 8", tail_entry)
         self.assertIn("lw $ra, 20($sp)", tail_entry)
         self.assertIn('.section .recomp_callback.*:recomp_on_init,"ax",@progbits', assembly)
-        self.assertEqual(assembly.count(".type "), 13)
+        self.assertEqual(assembly.count(".type "), 14)
         self.assertIn(".long 0x3C05005B", assembly)
+        self.assertEqual(generated["cpu_load_adapter"], {
+            "address": "0x805A6F68", "expected_word": "0x8C46000C",
+            "target": "amped_load_animation_angles",
+        })
+        self.assertEqual(assembly.count("jal amped_load_animation_angles"), 1)
 
 
 def main() -> int:

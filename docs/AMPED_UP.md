@@ -23,7 +23,7 @@ The segment-0 convention follows the pinned MK64 source. `lib/mk64/src/main.c` c
 
 The importer also lowers Amped helper `0x804ADE40`'s original 960-effect cutoff to 660. That helper indexes `gGfxPool->mtxEffect`, whose pinned `GfxPool` allocation has 660 matrices; allowing index 660 or higher would write beyond that array into later pool fields. This bound does not affect the model's vertex/display-list graph.
 
-The build extracts the ten renderer and helper functions from the verified patched image, relocates their direct MIPS calls against the pinned MK64 function symbols, and invokes the pinned `RecompModTool` and `OfflineModRecomp`. The generated source has 13 unique function definitions: ten extracted functions, the `render_kart` wrapper, one animation tail-call adapter, and the segment-copy callback. The `render_kart` O32 adapter provides the renderer's fifth stack argument and saves `$ra` beyond its 16-byte argument home area; the stock animation adapter does the same and masks its two pointer arguments to segment-0 offsets. A base (`*`) `recomp_on_init` callback copies the hydrated model data segment to its original fixed address `0x80400000` before game rendering. The NRM identifies `mk64` as its target game without requiring a separate mod dependency. The stock functions called by this closure were byte-compared between retail and Amped ROMs and were unchanged. `OfflineModRecomp` output, the linked ELF/map/disassembly, raw and hydrated segments, import report, and build report are kept under ignored `build/amped_up/`.
+The build extracts the ten renderer and helper functions from the verified patched image, relocates their direct MIPS calls against the pinned MK64 function symbols, and invokes the pinned `RecompModTool` and `OfflineModRecomp`. The generated source has 14 unique function definitions: ten extracted functions, the `render_kart` wrapper, animation tail-call and CPU-load adapters, and the segment-copy callback. The `render_kart` O32 adapter provides the renderer's fifth stack argument and saves `$ra` beyond its 16-byte argument home area; the stock animation adapter does the same and masks its two pointer arguments to segment-0 offsets. A base (`*`) `recomp_on_init` callback copies the hydrated model data segment to its original fixed address `0x80400000` before game rendering. The NRM identifies `mk64` as its target game without requiring a separate mod dependency. The stock functions called by this closure were byte-compared between retail and Amped ROMs and were unchanged. `OfflineModRecomp` output, the linked ELF/map/disassembly, raw and hydrated segments, import report, and build report are kept under ignored `build/amped_up/`.
 
 The command above keeps the successful package under ignored `build/amped_up/mod/`. Without `--output-nrm`, the desktop default remains `mods/amped_up.nrm`, which the project loads when present. Its fixed model-data range is `0x80400000..0x8072E3AF`, within expansion RAM and above the retail allocator/static image. That is a shared fixed-address reservation: other mods must not use this range at the same time. The importer cannot detect conflicts with other installed mods.
 
@@ -80,10 +80,32 @@ The importer tests execute the actual encoded load and selector blocks for every
 player and character, with different palette phases and preserved call arguments.
 Native multiple-frame effect images remain a separate acceptance check.
 
-The source-verified wear-fix candidate is private NRM
-`b9715d16d164aae3c948ca265563445967049de67787206a32bc84bbc9f8b980`, with hydrated
-segment `f202d50084299aaf2658edbee93f04ddba9936e92f9dac2ed27fb8fbd3cc8e78`.
-Its importer passes 14 checks and both pinned mod compilation tools produce 13
+The first full-detail candidate crashed on entering a native race. The newly
+reached helper at `0x805A6D30` directly loads an Animation's angle pointer and
+writes steering angles before calling stock animation code. Stored segment-0
+pointers cannot be used for those CPU accesses. A checked substitution for
+`lw a2,12(v0)` (`0x8C46000C`) at `0x805A6F68` calls a local adapter which restores
+KSEG0 to the Animation pointer and loaded angle pointer. Its original delay-slot
+instruction still executes; the enclosing helper restores its saved return
+address. The stored data retains segment-0 encoding for stock traversal.
+The animation table spans all 34 entries at `0x805A5400..0x805A5484`, including
+steering, effect and podium states; all entries and nested pointers are hydrated.
+
+After `build_mod.py`, run `python3 tools/amped_up/test_animation_runtime.py`.
+It compiles the generated helper/adapters and the actual stock recompiled
+animation traversal, checks every CPU access, and rejects invalid segment
+selectors. Only the matrix conversion functions are observers. It covers
+2,192 helper/traversal cases and 19,728 limbs; running the previous generated
+helper reproduces its invalid CPU read at `0x005AFCFC`.
+The helper scenarios set `gCurrentCourseId` at `0x800DC5A0` and the race/menu
+state at `0x800DC510` (the signed offsets following `lui 0x800E`). Assertions
+observe the selected animation index: ordinary idle uses character + 1; Amped's
+course-20 ceremony route uses character + 18 or + 26 according to player slot.
+
+The corrected private NRM is
+`26a3afd600aeb5c6b56857443bb197bd85da633439617a3c17856083d12a02c7`, with hydrated
+segment `d36ed4d039d2f9314605a88a65c75812172e33d76a0b99d33a05fb9430a9d3d5`.
+Its importer passes 14 checks and both pinned mod compilation tools produce 14
 functions. The candidate and selector/import/build provenance are under ignored
-`build-linux-vr-validation/wear-fixes/mod/`. These are source/package checks;
+`build-linux-vr-validation/wear-fixes/mod/`. These are source/package/host checks;
 native all-racer images, star phases and performance remain distinct acceptance.

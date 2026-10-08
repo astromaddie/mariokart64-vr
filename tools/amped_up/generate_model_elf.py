@@ -92,9 +92,19 @@ def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_
         definition_names.append(name)
         calls: list[str] = []
         for index, word in enumerate(words):
+            pc = address + index * 4
+            # This helper directly dereferences two fields also consumed by
+            # stock segmented_to_virtual. Keep their stored segment-0 form,
+            # but restore KSEG0 for the helper's CPU read and steering writes.
+            # Its original RA is already saved and restored after this site;
+            # the original delay instruction only finishes the armature base.
+            if pc == 0x805A6F68:
+                if word != 0x8C46000C:
+                    raise GenerationError("animation CPU load at 805A6F68 changed")
+                lines.append("  jal amped_load_animation_angles")
+                continue
             opcode = word >> 26
             if opcode in (2, 3):
-                pc = address + index * 4
                 target = ((pc + 4) & 0xF0000000) | ((word & 0x03FFFFFF) << 2)
                 symbol = target_names.get(target)
                 if symbol is None:
@@ -110,6 +120,20 @@ def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_
                 lines.append(f"  .long 0x{word:08X}")
         lines += [f".size {name}, .-{name}", ""]
         observed_calls[name] = calls
+
+    definition_names.append("amped_load_animation_angles")
+    lines += [
+        ".globl amped_load_animation_angles",
+        ".type amped_load_animation_angles,@function",
+        "amped_load_animation_angles:",
+        "  lui $at, 0x8000",
+        "  or $v0, $v0, $at",
+        "  lw $a2, 12($v0)",
+        "  jr $ra",
+        "  or $a2, $a2, $at",
+        ".size amped_load_animation_angles, .-amped_load_animation_angles",
+        "",
+    ]
 
     # N64Recomp handles direct JAL calls to reference symbols, but a direct J
     # to a stock reference becomes an unresolved branch. A local MIPS thunk
@@ -172,8 +196,8 @@ def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_
         raise GenerationError(
             "the traced model path must contain ten extracted functions and one render_animated_model tail thunk"
         )
-    if len(definition_names) != 13:
-        raise GenerationError(f"expected 13 unique MIPS function definitions, found {len(definition_names)}")
+    if len(definition_names) != 14:
+        raise GenerationError(f"expected 14 unique MIPS function definitions, found {len(definition_names)}")
 
     assembly_path.parent.mkdir(parents=True, exist_ok=True)
     assembly_path.write_text("\n".join(lines), encoding="utf-8")
@@ -187,6 +211,8 @@ def generate(config_path: Path, segment_path: Path, report_path: Path, assembly_
         "call_targets": sorted({call.split(":", 1)[1] for calls in observed_calls.values() for call in calls}),
         "calls": observed_calls,
         "code_patches": report["model_package_hydration"]["code_patches"],
+        "cpu_load_adapter": {"address": "0x805A6F68", "expected_word": "0x8C46000C",
+                             "target": "amped_load_animation_angles"},
         "assembly_path": str(assembly_path),
     }
 
