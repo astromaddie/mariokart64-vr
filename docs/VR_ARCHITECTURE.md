@@ -375,6 +375,16 @@ Existing accelerator, brake, drift and item buttons remain available. Wheel
 steering uses the calibrated seat frame, so looking sideways does not steer.
 First-person grips reserve camera adjustment for the settings preview.
 
+The over-shoulder variant raises a held item beside either shoulder and releases
+it during a backward swing. Direction is measured in the calibrated kart/seat
+frame, independent of head yaw. Bananas drop behind; green shells fire backward
+with normal bounce/collision. Rear red-shell shots travel directly backward,
+while forward red throws retain native homing. This rear red behavior needs an
+explicit integration path: retail red-shell `MOVING_SHELL` advances to homing
+after its launch timer and can target a racer ahead. Invalid hand tracking must
+retain the item and disarm launch; losing a controller behind the shoulder must
+not count as a grip-release throw.
+
 This is a mockup awaiting controls/asset review, not an implemented or tested
 game feature. Its original SVG components illustrate interaction; the game
 should retain the standard Amped Up racer art. The mapped Mario/Wario armatures
