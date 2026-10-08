@@ -6,7 +6,7 @@ namespace mk64vr {
 using namespace dk64vr;
 struct HandSample { bool valid = false, grip = false; Pose pose; Vec3 velocity; bool velocityValid = false; };
 struct FirstPersonConfig {
-    Vec3 wheel{0, -.35f, -.45f}; float radius = .18f, rimTolerance = .12f;
+    Vec3 wheel{0, -.28f, -.25f}; float radius = .18f, rimTolerance = .12f;
     float maxTurn = 1.05f, shoulderZ = .12f, quietSpeed = .35f;
 };
 struct FirstPersonOutput {

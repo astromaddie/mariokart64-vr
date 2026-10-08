@@ -87,7 +87,7 @@ int main(){
         const bool fused=racer==3;
         Vec3 pivot{rig.wrist[0]*side,rig.wrist[1],rig.wrist[2]};
         if(fused){pivot.x+=rig.elbow[0]*side;pivot.y+=rig.elbow[1];pivot.z+=rig.elbow[2];}
-        Pose target{{},{hand?1.8f:-1.8f,-2.8f,-2.8f}};
+        Pose target{{},{(hand?1.f:-1.f)*c.radius*10.f,c.wheel.y*10.f,c.wheel.z*10.f}};
         auto skin=armSkinMatrix(racer,hand,fused?0:1,31,target,.005f,rig.eye_height);
         Vec3 grip=transformPoint(pivot,skin);
         assert(near(grip.x,target.p.x,.005f) && near(grip.y,target.p.y,.005f) && near(grip.z,target.p.z,.005f));
