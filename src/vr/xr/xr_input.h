@@ -9,6 +9,7 @@
 
 #include "dk64vr_input.h"
 #include "dk64vr_math.h"
+#include "mk64_interaction.h"
 #include "sfvr/sfvr_haptics.h"
 
 namespace dk64vr {
@@ -25,6 +26,7 @@ public:
 
     // The dominant hand's aim pose (hand 0 = left, 1 = right), valid when tracked.
     bool aimPose(int hand, Pose &pose) const { pose = aim[hand]; return aimValid[hand]; }
+    mk64vr::HandSample handSample(int hand) const { return hands[hand]; }
     bool gazePose(Pose &pose) const { pose = gaze; return gazeValid; }
 
     sfvr_haptic_queue haptics = {};
@@ -41,6 +43,8 @@ private:
     XrAction actions[ActCount] = {};
     XrSpace aimSpace[2] = { XR_NULL_HANDLE, XR_NULL_HANDLE };
     Pose aim[2];
+    XrSpace gripSpace[2] = {XR_NULL_HANDLE, XR_NULL_HANDLE};
+    mk64vr::HandSample hands[2];
     bool aimValid[2] = {};
     XrAction gazeAction = XR_NULL_HANDLE;
     XrSpace gazeSpace = XR_NULL_HANDLE;

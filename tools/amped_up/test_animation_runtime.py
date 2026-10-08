@@ -23,6 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--offline", type=Path, default=ROOT / "build/amped_up/offline_model_mod.c")
     parser.add_argument("--segment", type=Path, default=ROOT / "build/amped_up/amped_up_custom_segment.bin")
+    parser.add_argument("--first-person", action="store_true", help="execute the compiled first-person limb/skin emission patch")
     args = parser.parse_args()
     mod = functions(args.offline.read_text())
     helper = next(name for name, body in mod.items() if "0X5400" in body and "0XC0" in body)
@@ -38,6 +39,21 @@ def main():
     for path in (ROOT / "RecompiledFuncs").glob("funcs_*.c"):
         selected.update({name: body for name, body in functions(path.read_text()).items() if name in stock_names})
     assert stock_names <= selected.keys()
+    patch_symbols = {}
+    if args.first_person:
+        patch = functions((ROOT / "RecompiledPatches/patches.c").read_text())
+        selected["render_limb_or_add_mtx"] = patch["render_limb_or_add_mtx"]
+        pending = ["render_limb_or_add_mtx"]
+        while pending:
+            for name in re.findall(r"\b(\w+)\(rdram, ctx\)", selected[pending.pop()]):
+                if name in patch and name not in selected:
+                    selected[name] = patch[name]
+                    pending.append(name)
+        for line in (ROOT / "patches/patches.map").read_text().splitlines():
+            fields=line.split()
+            if len(fields)==5 and fields[-1] in ("mk64_vr_interaction","mk64_vr_local_draw"):
+                patch_symbols[fields[-1]]=int(fields[0],16)
+        assert len(patch_symbols)==2
     # All imported animation operands must select segment zero. A zeroed host
     # fixture must not accidentally hide a KSEG token indexing segment 128.
     selected["segmented_to_virtual"] = '\nassert((uint32_t)ctx->r4 >> 24 == 0);\n' + selected["segmented_to_virtual"]
@@ -50,8 +66,9 @@ def main():
 #undef RECOMP_FUNC
 #define RECOMP_FUNC
 static unsigned calls, cases, last_animation;
+void recomp_vr_is_active(uint8_t* rdram,recomp_context* ctx){ctx->r2=1;}
 static void* checked(uint8_t* ram, gpr address, unsigned size, unsigned swap) {
-    if (address < 0xffffffff80000000ULL || address + size > 0xffffffff80800000ULL) {
+    if (address < 0xffffffff80000000ULL || address + size > 0xffffffff82000000ULL) {
         fprintf(stderr, "invalid CPU access: %016llx size=%u case=%u\n",
                 (unsigned long long)address, size, cases);
         exit(2);
@@ -81,10 +98,11 @@ void convert_to_fixed_point_matrix_animation(uint8_t* rdram, recomp_context* ctx
     source += "\n".join(f"void {name}(uint8_t* rdram, recomp_context* ctx) {{{body}" for name, body in selected.items())
     source += r'''
 int main(int argc, char** argv) {
-    uint8_t* rdram = calloc(1, 0x800000);
+    uint8_t* rdram = calloc(1, 0x2000000);
     FILE* f = fopen(argv[1], "rb"); assert(f);
     for (unsigned i=0; i<0x32e3b0; i++) { int c=fgetc(f); assert(c>=0); rdram[(0x400000+i)^3]=c; }
     fclose(f);
+    FP_INITIALIZE
     // Segment zero, production globals and an isolated display list / matrix pool.
     MEM_W(S32(0x80150258),0)=0;
     MEM_W(S32(0x8014ef40),0)=S32(0x80200000);
@@ -103,6 +121,7 @@ int main(int argc, char** argv) {
         MEM_H(S32(0x800dc5a0),0)=mode?20:4;
         MEM_W(S32(0x800dc510),0)=4;
         MEM_H(ctx.r29,0x12)=character;
+        MEM_H(S32(0x800f6990),0x254)=character;
         MEM_W(S32(0x80150298),0)=S32(0x80300000);
         MEM_W(S32(0x8018d120),0)=0;
         unsigned before=calls;
@@ -119,20 +138,41 @@ int main(int argc, char** argv) {
         recomp_context ctx={0}; ctx.r29=S32(0x803f0000); ctx.r31=S32(0x80001234);
         ctx.r4=MEM_W(S32(0x805a4740),character*4); ctx.r5=0x005a5400;
         ctx.r6=animation; ctx.r7=31;
+        MEM_H(S32(0x800f6990),0x254)=character;
         MEM_W(S32(0x80150298),0)=S32(0x80300000); MEM_W(S32(0x8018d120),0)=0;
         unsigned before=calls; render_animated_model(rdram,&ctx); assert(calls-before==9);
+        FP_VALIDATE
         cases++;
     }
     printf("PASS %u generated helper / stock traversal cases; %u animated limbs\n",cases,calls);
     free(rdram);
 }
 '''.replace("HELPER", helper)
+    source=source.replace("FP_INITIALIZE", "") .replace("FP_VALIDATE", "") if not args.first_person else source.replace("FP_INITIALIZE", f"""
+    MEM_W(S32(0x{patch_symbols['mk64_vr_local_draw']:08x}),0)=1;
+    MEM_W(S32(0x{patch_symbols['mk64_vr_interaction']:08x}),4)=1;
+    FILE* patchFile=fopen(argv[2],"rb"); assert(patchFile);
+    for(unsigned i=0;;i++) {{int ch=fgetc(patchFile);if(ch<0)break;rdram[(0x801000+i)^3]=ch;}}
+    fclose(patchFile);
+""").replace("FP_VALIDATE", r"""
+        unsigned seen=0, weights=0, vertices=0, anchors=0;
+        const unsigned end=MEM_W(S32(0x80150298),0);
+        for(unsigned address=0x80300000;address<end;address+=8){
+            unsigned w0=MEM_W(S32(address),0),w1=MEM_W(S32(address),4);
+            // Matrix-group extension embeds the explicit group id as its second word.
+            if(w1==0x73000001u)anchors++;
+            if((w1&0xff000000)==0x71000000){seen|=1u<<((w1>>12)&3);weights|=1u<<(w1&31);}
+            if((w0>>24)==4){assert(((w0>>10)&63)==1);assert(((w0>>17)&127)<32);vertices++;}
+        }
+        assert(vertices>0 && (seen & 5)==5 && anchors==1);
+        if(character==3)assert((weights&1) && (weights&0x80000000u));
+""")
     with tempfile.TemporaryDirectory(prefix="amped-animation-") as directory:
         path = Path(directory)
         (path / "test.c").write_text(source)
         subprocess.run(["cc", "-std=c11", "-O1", "-w", "-I", str(ROOT / "lib/N64ModernRuntime/N64Recomp/include"),
                         str(path / "test.c"), "-o", str(path / "test")], check=True)
-        subprocess.run([str(path / "test"), str(args.segment.resolve())], check=True)
+        subprocess.run([str(path / "test"), str(args.segment.resolve()),str(ROOT / "patches/patches.bin")], check=True)
 
 
 if __name__ == "__main__":

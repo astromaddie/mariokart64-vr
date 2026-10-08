@@ -2,6 +2,8 @@
 #include "main.h"
 #include "../include/mk64_frame.h"
 
+extern void mk64_vr_tick(void);
+extern int mk64_vr_held_item(void);
 extern int recomp_mk64_frame_enabled(void);
 extern void recomp_mk64_frame(const Mk64Frame* frame);
 
@@ -157,6 +159,7 @@ RECOMP_PATCH void end_master_display_list(void) {
     if (recomp_mk64_frame_enabled()) {
         static unsigned int frame_number;
         Mk64Frame state;
+        mk64_vr_tick();
         Camera* camera = &cameras[0];
         state.frame = ++frame_number;
         diagnostic_scene(frame_number);
@@ -167,6 +170,12 @@ RECOMP_PATCH void end_master_display_list(void) {
         state.course = gCurrentCourseId;
         state.global_timer = gGlobalTimer;
         state.race_time = gCourseTimer;
+        // Native forward launch is +Z rotated by rotation[1]+unk_0C0. Camera forward is -Z.
+        state.racer_heading = 3.141592653589793f - (gPlayers[0].rotation[1] + gPlayers[0].unk_0C0) * (6.283185307179586f / 65536.0f);
+        state.racer_size = gPlayers[0].size;
+        state.racer_character = gPlayers[0].characterId;
+        state.racer_item = gPlayers[0].currentItemCopy;
+        state.held_item = mk64_vr_held_item();
         for (int axis = 0; axis < 3; ++axis) {
             state.eye[axis] = camera->pos[axis];
             state.at[axis] = camera->lookAt[axis];

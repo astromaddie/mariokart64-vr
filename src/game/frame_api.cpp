@@ -8,6 +8,7 @@
 #include "recomp.h"
 #include "librecomp/helpers.hpp"
 #include "mk64_frame.h"
+#include "mk64_first_person.h"
 
 #ifdef MK64_VR
 #include <mutex>
@@ -20,6 +21,10 @@ constexpr size_t kWords = sizeof(dk64vr_game_state) / sizeof(uint32_t);
 std::atomic<uint32_t> sequence{0};
 std::atomic<uint32_t> snapshot[kWords]{};
 std::mutex writer_mutex;
+std::mutex interaction_mutex;
+Mk64VRInteraction interaction{};
+Mk64Frame racer{};
+unsigned interaction_serial = 0;
 std::atomic<int> active{0};
 std::atomic<int> render_yaw{0};
 std::atomic<int> diag_save_in_play{0};
@@ -33,6 +38,24 @@ bool force_patches() {
 }
 }
 
+extern "C" void mk64_vr_publish_interaction(const Mk64VRInteraction* state) {
+    std::lock_guard<std::mutex> lock(interaction_mutex);
+    // Keep one edge until the simulation consumes it; display frames cannot overwrite it.
+    const int command = interaction.command;
+    const int rear = interaction.rear;
+    float velocity[3]; std::memcpy(velocity, interaction.velocity, sizeof velocity);
+    interaction = *state;
+    if (command && !state->command && state->enabled) { interaction.command=command; interaction.rear=rear; std::memcpy(interaction.velocity,velocity,sizeof velocity); }
+    interaction.serial = ++interaction_serial;
+}
+extern "C" void mk64_vr_get_racer(Mk64Frame* state) {
+    std::lock_guard<std::mutex> lock(interaction_mutex); *state=racer;
+}
+extern "C" void recomp_mk64_vr_interaction(uint8_t* rdram, recomp_context* ctx) {
+    std::lock_guard<std::mutex> lock(interaction_mutex);
+    std::memcpy(_arg<0, Mk64VRInteraction*>(rdram, ctx), &interaction, sizeof interaction);
+    interaction.command=0;
+}
 extern "C" void dk64vr_publish_game_state(const dk64vr_game_state *state) {
     if (!state) return;
     uint32_t words[kWords];
@@ -81,10 +104,13 @@ extern "C" void recomp_vr_is_active(uint8_t *rdram, recomp_context *ctx) {
 }
 #endif
 #ifndef MK64_VR
+extern "C" void recomp_mk64_vr_interaction(uint8_t* rdram, recomp_context* ctx) {
+    Mk64VRInteraction empty{}; std::memcpy(_arg<0, Mk64VRInteraction*>(rdram, ctx), &empty, sizeof empty);
+}
 extern "C" void recomp_mk64_vr_yaw(uint8_t*, recomp_context* ctx) { _return(ctx, 0); }
 extern "C" void recomp_vr_is_active(uint8_t*, recomp_context* ctx) { _return(ctx, 0); }
 #endif
-static_assert(sizeof(Mk64Frame) == 272, "MIPS/native frame ABI");
+static_assert(sizeof(Mk64Frame) == 292, "MIPS/native frame ABI");
 namespace {
 std::atomic<bool> in_race{false};
 std::atomic<unsigned> game_frame{0};
@@ -156,6 +182,7 @@ extern "C" void recomp_mk64_frame(uint8_t* rdram, recomp_context* ctx) {
     Mk64Frame state;
     std::memcpy(&state, _arg<0, const Mk64Frame*>(rdram, ctx), sizeof(state));
 #ifdef MK64_VR
+    { std::lock_guard<std::mutex> lock(interaction_mutex); racer=state; }
     dk64vr_game_state vr{};
     vr.frame = state.frame;
     vr.scene = mk64_vr_scene(state);

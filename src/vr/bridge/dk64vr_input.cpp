@@ -18,9 +18,12 @@ const ActionDef actionDefs[ActCount] = {
     { "x", "X (N64 B: attack)", ActionKind::Boolean },
     { "y", "Y (C-left)", ActionKind::Boolean },
     { "menu", "Menu (Start, pause)", ActionKind::Boolean },
-    { "view", "View (recomp menu; hold to recentre)", ActionKind::Boolean },
+    { "view", "View (race camera / menu; hold to recentre)", ActionKind::Boolean },
     { "l_bumper", "Left bumper (C-down)", ActionKind::Boolean },
-    { "l_grip", "Left grip (VR adjustment modifier)", ActionKind::Float },
+    { "l_grip", "Left grip (wheel / item; settings modifier)", ActionKind::Float },
+    { "r_grip", "Right grip (wheel or item)", ActionKind::Float },
+    { "grip_left", "Left wrist pose", ActionKind::Pose },
+    { "grip_right", "Right wrist pose", ActionKind::Pose },
     { "r_bumper", "Right bumper (C-up)", ActionKind::Boolean },
     { "l_stick_click", "Left stick click", ActionKind::Boolean },
     { "r_stick_click", "Right stick click (N64 L)", ActionKind::Boolean },
@@ -51,6 +54,7 @@ const Binding frameBindings[] = {
     { ActView, L_ "input/view/click" },
     { ActLBumper, L_ "input/bumper/click" },
     { ActLGrip, L_ "input/squeeze/value" },
+    { ActRGrip, R_ "input/squeeze/value" },
     { ActRBumper, R_ "input/bumper/click" },
     { ActLStickClick, L_ "input/thumbstick/click" },
     { ActRStickClick, R_ "input/thumbstick/click" },
@@ -62,6 +66,8 @@ const Binding frameBindings[] = {
     { ActRTrigger, R_ "input/trigger/value" },
     { ActLStick, L_ "input/thumbstick" },
     { ActRStick, R_ "input/thumbstick" },
+    { ActGripLeft, L_ "input/grip/pose" },
+    { ActGripRight, R_ "input/grip/pose" },
     { ActAimLeft, L_ "input/aim/pose" },
     { ActAimRight, R_ "input/aim/pose" },
     { ActHapticLeft, L_ "output/haptic" },
@@ -83,6 +89,8 @@ const Binding indexBindings[] = {
     { ActRTrigger, R_ "input/trigger/value" },
     { ActLStick, L_ "input/thumbstick" },
     { ActRStick, R_ "input/thumbstick" },
+    { ActGripLeft, L_ "input/grip/pose" },
+    { ActGripRight, R_ "input/grip/pose" },
     { ActAimLeft, L_ "input/aim/pose" },
     { ActAimRight, R_ "input/aim/pose" },
     { ActHapticLeft, L_ "output/haptic" },
@@ -105,6 +113,8 @@ const Binding touchBindings[] = {
     { ActRTrigger, R_ "input/trigger/value" },
     { ActLStick, L_ "input/thumbstick" },
     { ActRStick, R_ "input/thumbstick" },
+    { ActGripLeft, L_ "input/grip/pose" },
+    { ActGripRight, R_ "input/grip/pose" },
     { ActAimLeft, L_ "input/aim/pose" },
     { ActAimRight, R_ "input/aim/pose" },
     { ActHapticLeft, L_ "output/haptic" },
@@ -316,7 +326,7 @@ InputResult InputMapper::update(const InputSample &raw, const InputConfig &confi
         toggleReads = 0;
     }
 
-    // System layer: View short press opens or closes the recomp menu (DK64 Recompiled's Back);
+    // System layer: View tap toggles the race camera when the game enables it; elsewhere Back.
     // held 1 s it recentres (3 s recentres again: there is no standing height in this game).
     sfvr_view_config viewConfig;
     sfvr_view_config_default(&viewConfig);
@@ -324,7 +334,8 @@ InputResult InputMapper::update(const InputSample &raw, const InputConfig &confi
     const unsigned events = sfvr_view_update(&viewButton, &viewConfig, s.view ? 1 : 0, nowS);
     view = { viewButton.state, viewButton.press_s, viewButton.recentred, viewButton.recalibrated };
     if (events & SFVR_VIEW_SHORT_PRESS) {
-        toggleReads = 2;
+        if (context.viewTogglesCamera && !context.menuOpen) r.toggleCamera = true;
+        else toggleReads = 2;
     }
 
     if (events & SFVR_VIEW_RECENTRE) {

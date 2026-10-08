@@ -54,3 +54,10 @@ target_include_directories(mk64_diagnostic_pose PRIVATE ../bridge ${DK64VR_ROOT}
 target_compile_options(mk64_diagnostic_pose PRIVATE -Wall -Wextra)
 add_test(NAME mk64_diagnostic_pose COMMAND mk64_diagnostic_pose)
 add_test(NAME mk64_diagnostic_scene COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/diagnostic_scene_test.py)
+add_executable(mk64_first_person_tests mk64_first_person_tests.cpp ../bridge/mk64_first_person.cpp
+    ../bridge/dk64vr_math.cpp ../bridge/dk64vr_input.cpp
+    ../../../third_party/sfvr/src/sfvr_camera.c ../../../third_party/sfvr/src/sfvr_turn.c
+    ../../../third_party/sfvr/src/sfvr_view.c)
+target_include_directories(mk64_first_person_tests PRIVATE ../../../include ../bridge ../../../third_party/sfvr/include ../../../lib/rt64/src)
+target_compile_options(mk64_first_person_tests PRIVATE -Wall -Wextra -ffp-contract=off)
+add_test(NAME mk64_first_person_tests COMMAND mk64_first_person_tests)

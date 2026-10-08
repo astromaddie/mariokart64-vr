@@ -36,6 +36,9 @@ enum Action : int {
     ActView,
     ActLBumper,
     ActLGrip,
+    ActRGrip,
+    ActGripLeft,
+    ActGripRight,
     ActRBumper,
     ActLStickClick,
     ActRStickClick,
@@ -101,7 +104,7 @@ const uint32_t TabLeft = 1u << 7, TabRight = 1u << 8, ToggleMenu = 1u << 9;
 struct InputSample {
     bool valid = false;  // focused and synced; false releases everything
     bool a = false, b = false, x = false, y = false, menu = false, view = false;
-    bool lBumper = false, lGrip = false, rBumper = false, lStickClick = false, rStickClick = false;
+    bool lBumper = false, lGrip = false, rGrip = false, rBumper = false, lStickClick = false, rStickClick = false;
     bool dpadUp = false, dpadDown = false, dpadLeft = false, dpadRight = false;
     float lTrigger = 0.0f, rTrigger = 0.0f;
     float lStick[2] = {}, rStick[2] = {};  // x right, y up
@@ -125,6 +128,7 @@ struct InputConfig {
 
 // What the game is showing, for routing.
 struct InputContext {
+    bool viewTogglesCamera = false;
     bool menuOpen = false;   // a recompui menu has the input (the game's input is off)
     bool stereoPlay = false; // 3D play (gameplay or first person) in stereo: turning applies
     float viewYawRad = 0.0f; // yaw of the movement reference (head or hand) relative to the
@@ -136,6 +140,7 @@ struct InputResult {
     float stickX = 0.0f, stickY = 0.0f;  // N64 stick, -1..1, y up
     uint32_t navHeld = 0;     // recompui navigation, held state
     float turnDeg = 0.0f;     // comfort turn this frame, positive = right (clockwise from above)
+    bool toggleCamera = false;
     bool recentre = false;    // View held 1 s or 3 s
     bool recalibrateHeight = false; // View held 3 s: retain a new standing-height calibration
     bool systemBuzz = false;  // the standard's 0.6/80 ms buzz on both hands

@@ -2,6 +2,11 @@
 #include "vr_render.h"
 
 extern int mk64_diag_racers_enabled;
+extern int mk64_vr_local_draw;
+extern int mk64_vr_item_is_held(struct Actor* actor);
+extern void mk64_vr_draw_wheel(void);
+extern void mk64_vr_begin_kart(void);
+extern void mk64_vr_end_kart(void);
 void mk64_diag_racer(Player* player, int playerId, Gfx* begin, Gfx* end);
 
 #if 1 // GLOBAL
@@ -130,7 +135,12 @@ RECOMP_PATCH void render_player(Player* player, s8 playerId, s8 screenId) {
                 G_EX_ORDER_AUTO, G_EX_EDIT_ALLOW, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         }
         Gfx* racer_start = gDisplayListHead;
+        mk64_vr_local_draw = player == gPlayerOne && playerId == 0 && screenId == 0;
+        mk64_vr_begin_kart();
         render_kart(player, playerId, screenId, var_v1);
+        mk64_vr_end_kart();
+        if (mk64_vr_local_draw) mk64_vr_draw_wheel();
+        mk64_vr_local_draw = 0;
         if (mk64_diag_racers_enabled && screenId == 0)
             mk64_diag_racer(player, playerId, racer_start, gDisplayListHead);
 
@@ -1665,13 +1675,19 @@ RECOMP_PATCH void render_course_actors(struct UnkStruct_800DC5EC* arg0) {
                 render_actor_kiwano_fruit(camera, D_801502C0, actor);
                 break;
             case ACTOR_BANANA:
+                if(mk64_vr_item_is_held(actor)) gEXMatrixGroupDecomposedNormal(gDisplayListHead++,0x74000000u,G_EX_PUSH,G_MTX_MODELVIEW,G_EX_EDIT_ALLOW);
                 render_actor_banana(camera, D_801502C0, (struct BananaActor*) actor);
+                if(mk64_vr_item_is_held(actor)) gEXPopMatrixGroup(gDisplayListHead++,G_MTX_MODELVIEW);
                 break;
             case ACTOR_GREEN_SHELL:
+                if(mk64_vr_item_is_held(actor)) gEXMatrixGroupDecomposedNormal(gDisplayListHead++,0x74000000u,G_EX_PUSH,G_MTX_MODELVIEW,G_EX_EDIT_ALLOW);
                 render_actor_green_shell(camera, D_801502C0, (struct ShellActor*) actor);
+                if(mk64_vr_item_is_held(actor)) gEXPopMatrixGroup(gDisplayListHead++,G_MTX_MODELVIEW);
                 break;
             case ACTOR_RED_SHELL:
+                if(mk64_vr_item_is_held(actor)) gEXMatrixGroupDecomposedNormal(gDisplayListHead++,0x74000000u,G_EX_PUSH,G_MTX_MODELVIEW,G_EX_EDIT_ALLOW);
                 render_actor_red_shell(camera, D_801502C0, (struct ShellActor*) actor);
+                if(mk64_vr_item_is_held(actor)) gEXPopMatrixGroup(gDisplayListHead++,G_MTX_MODELVIEW);
                 break;
             case ACTOR_BLUE_SPINY_SHELL:
                 render_actor_blue_shell(camera, D_801502C0, (struct ShellActor*) actor);

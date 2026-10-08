@@ -65,7 +65,9 @@ the game camera's position and orientation with about half a game frame of addit
 delay (16.7 ms at Mario Kart's 30 Hz). One rigid correction is shared by both eyes and
 the world/sky camera groups. The predicted OpenXR head pose is applied separately;
 physical head movement is not filtered. Scene changes and large camera jumps reset
-the history, and cinema/first-person views bypass the filter.
+the history. Cinema bypasses the filter; the optional first-person seat has its own
+LOW smoother over native racer position and heading. Its horizon stays level and
+physical head tracking remains unfiltered.
 
 The renderer already contained this code in package `dbcd585e…7850ca2`; the first
 baseline and the three initial 2160/120 measurements deliberately used `off`, which
@@ -128,16 +130,20 @@ default. Controller playtesting remains pending.
 
 `MK64_VR` defaults OFF. ON installs the committed generic host from Banjo revision
 `b426f05f3722a4e947a5c224601e906eff158c65`, with Mario Kart scene/profile/input adaptations.
-RT64 is pinned to `0b59675ded29a010f5035600d88e877046f7c9d3` and Plume to
+RT64 is pinned to `8e5e39070f57ac570a5c6f1fe0d3a1fd67db8503` and Plume to
 `1699a49cabc1a29d9470d9ee5192b7c176865c17`. The author frontend stays at
 `c3bc7a2e9eff532c7f55b28d78fc4e07afb923aa` with runtime
 `6021a7d9f6e970ebdd078951441502343f3b0453`; the older Banjo frontend API is incompatible.
-No modifications to those dependencies are required. If no OpenXR runtime is present, the application falls back to the stock flat UI.
+The RT64 fork adds an optional display-time model transform callback for the local
+kart, wheel, articulated arms and held item. Other hosts default to an inactive
+callback. If no OpenXR runtime is present, the application falls back to the stock flat UI.
 
 OpenXR uses the Steam Frame controller profile first and merges real actions into the N64 pad.
 A is accelerate/confirm, X is brake/B, left bumper/trigger Z, right bumper/trigger R,
 left stick-click L, right stick-click C-up, and B/Y/right stick retain C-buttons. Steering stays
-kart-relative regardless of head yaw. View retains recentre and the original frontend access.
+kart-relative regardless of head yaw. A short View press during gameplay toggles
+first/third person and saves the mode; a one-second hold recentres without toggling
+on release. View retains frontend/back behavior outside gameplay.
 Manual Steam dashboard reopening is not disabled. Controller operation is assumed at the user's
 request, not playtested. Custom VR menu entrypoints are deliberately inactive; configuration is
 `vr.toml` under the app data folder or `MK64_VR_*` environment overrides.
@@ -363,13 +369,14 @@ shows complete timer cells; completed-lap timing still needs a race retest. The
 normal saved profile remains LOW smoothing, automatic 2160-square eyes, 120 Hz,
 0.05 m near plane and billboard facing enabled. All diagnostics are process-only.
 
-## First-person controls proposal
+## First-person controls
 
 The [hosted interactive review sketch](https://mk64-first-person-mockup.astromaddie.chatgpt.site)
-([local copy](mockups/mk64-first-person.html)) proposes an optional
+([local copy](mockups/mk64-first-person.html)) records the approved interaction.
+The implementation adds an optional
 seated racer-eye view, visible racer arms with elbow IK, a grip-operated steering
 wheel, and hand-held shells/bananas released by a throwing gesture. It includes
-both off-wheel grip acquisition and a side pickup variant. One hand can steer
+off-wheel grip acquisition. One hand can steer
 while the other holds an item; no wheel grips restores left-stick steering.
 Existing accelerator, brake, drift and item buttons remain available. Wheel
 steering uses the calibrated seat frame, so looking sideways does not steer.
@@ -379,40 +386,59 @@ The over-shoulder variant raises a held item beside either shoulder and releases
 it during a backward swing. Direction is measured in the calibrated kart/seat
 frame, independent of head yaw. Bananas drop behind; green shells fire backward
 with normal bounce/collision. Rear red-shell shots travel directly backward,
-while forward red throws retain native homing. This rear red behavior needs an
-explicit integration path: retail red-shell `MOVING_SHELL` advances to homing
-after its launch timer and can target a racer ahead. Invalid hand tracking must
-retain the item and disarm launch; losing a controller behind the shoulder must
+while forward red throws retain native homing. A marked rear red actor bypasses
+the retail `MOVING_SHELL` transition into homing, while its owner-immunity timer,
+terrain/collision updates and unexpired-shell registration remain native. Invalid
+hand tracking retains the item and disarms launch; losing a controller behind the shoulder must
 not count as a grip-release throw.
 
-This is a mockup awaiting controls/asset review, not an implemented or tested
-game feature. Its original SVG components illustrate interaction; the game
-should retain the standard Amped Up racer art. The mapped Mario/Wario armatures
-already contain mirrored upper-arm and child forearm/hand geometry (records
-7/9 and 13/15). Bilateral offsets and vertex bounds support that anatomical
-interpretation; the source records have no bone names. Their wrists lack a
-separate geometry node, so independent wrist rotation needs a mesh/rig adaptation.
-The remaining racers require the same per-character rig verification.
+The game retains the standard Amped Up racer meshes, textures and triangles for
+all eight racers. Their armatures contain mirrored upper-arm and child
+forearm/hand geometry (records 7/9 and 13/15), with unnamed source bones. Toad's
+forearm lists are empty, so its original combined upper-arm mesh is weighted
+across elbow and wrist transforms. Other racers retain rigid upper arms and
+weighted forearm/hand transforms. A bounded display-list walk tags original
+vertices into 32 weight bins; the renderer resolves two-bone elbow IK and tracked
+wrist orientation at presentation time. No replacement glove artwork is supplied.
+The local head/body are hidden, the original kart remains, and other racers render
+normally. The added steering rim shares its dimensions with grip hit-testing.
 
 Reusable prior art is F-Zero's vehicle seat anchor and Halo's
-`vr_drive_input` wheel mapping and `vr_solve_arm` two-bone solver. MK64 currently
-locates aim poses only; grip poses, right squeeze input, and release motion
-history must be added. Hand/head transforms and the wheel must share the same
-world-scale adapter and predicted presentation frame.
+`vr_drive_input` wheel mapping and `vr_solve_arm` two-bone solver. MK64 locates
+both grip poses and squeezes at the predicted frame time. Seat, wheel, arms,
+held item and the corrected local kart share one basis and world-scale adapter.
+Steering latches on a fresh grip near the rim. Moving a latched hand away does not
+take an item; release and a fresh off-rim grip are required. Clockwise wheel motion
+steers right. With no wheel grips the original left stick steers.
 
 Native item hooks are `use_green_shell_item`, `use_red_shell_item` and
 `use_banana_item` in `lib/mk64/src/racing/actors_extended.c`, plus the held/launch
 cases in `lib/mk64/src/actors/{green_shell,blue_and_red_shells,banana}/update.inc.c`.
 Single shells already use `HELD_SHELL`; bananas use `HELD_BANANA`. Hand attachment
-must replace their kart-relative held position and collision proxy. Release must
-preserve owner/type, native active states, timers and unexpired-shell registration;
+replaces their kart-relative held position and collision proxy. Release
+preserves owner/type, native active states, timers and unexpired-shell registration;
 red-shell homing and subsequent terrain/collision updates stay native. Triple-shell
-orbit and banana-bunch states need separate handling. Gesture detection uses raw
+orbit, banana bunches and other items retain the conventional item button.
+Gesture detection uses raw
 tracking motion, avoiding artificial hand speed from kart travel. Pause, focus
 loss, recentre and invalid tracking retain held items and disarm throws until a
-fresh grip. These integration points are source evidence, not runtime proof.
+valid release followed by a fresh valid grip. An invalid sample's zero squeeze
+cannot rearm a throw. Actor destruction and conventional item use clear tracked
+ownership before an actor slot can be reused. Mode changes also disarm gestures,
+retain the item and reset camera history.
 
-Acceptance requires production-path rig/item checks, submitted stereo captures
-with synthetic grip poses, a new 2160-square/120 Hz measurement, and a worn race
-covering one-hand steering, throws, quiet releases and recovery. Current stationary
-performance evidence does not establish performance with these proposed features.
+Eight host suites pass, including production grip latching, clockwise steering,
+quiet/forward/rear releases, invalid-tracking recovery, View tap/hold routing and
+all-eight skin transforms. The regenerated MIPS animation harness passes 2,192
+cases and 19,728 limbs in both ordinary and first-person emission, including
+Toad's distal tags and exactly one local kart anchor. The regenerated item harness
+passes native spawn/state/velocity/destruction checks and 35 ticks of rear red
+flight versus ordinary forward homing. Terrain and audio services are stubbed in
+that harness; these checks do not certify rendered or worn play.
+
+The complete ARM64 build, flat OFF build, package and native Frame validation are
+pending at this source revision. Native acceptance requires submitted stereo
+captures with synthetic grip poses and a fresh 2160-square/120 Hz measurement;
+worn acceptance additionally requires a race covering steering, physical throws,
+quiet releases and recovery. Local evidence is in ignored
+`build/first-person-evidence/` and `build-linux-vr-validation/first-person/`.

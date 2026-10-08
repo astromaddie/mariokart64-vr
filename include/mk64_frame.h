@@ -8,5 +8,7 @@ typedef struct Mk64Frame {
     float eye[3], at[3], up[3], fov, near_z, far_z;
     float player_pos[8][3], player_speed[8];
     int player_lap[8], player_rank[8];
+    float racer_heading, racer_size;
+    int racer_character, racer_item, held_item;
 } Mk64Frame;
 #endif

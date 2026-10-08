@@ -7,6 +7,8 @@
 // panelAcquire and panelRelease on RT64's present thread. Every OpenXR call that may touch the
 // Vulkan queue holds the queue's plume mutex.
 #include "dk64vr_host.h"
+#include "mk64_interaction.h"
+#include "../../../include/mk64_frame.h"
 
 #include <algorithm>
 #include <array>
@@ -178,6 +180,7 @@ public:
         const std::string settingsPath = (dataDir / "vr.toml").string();
         dk64vr_settings_load(&settings, settingsPath.c_str());
         logSettings();
+        dk64vr_logf("camera mode: %s (View tap toggles; hold recentres)", setting("first_person") != 0 ? "first person" : "chase");
         dk64vr_set_diag_save_in_play(setting("diag_save_in_play") != 0.0 ? 1 : 0);
 
         // Establish this before the loader enumerates implicit API layers or creates Vulkan.
@@ -560,6 +563,10 @@ public:
             const dk64vr_game_state state = gameState();
             const bool sceneCut = (state.frame != 0) && (state.scene != camTickScene);
             camTickScene = state.scene;
+            Mk64Frame racer{}; mk64_vr_get_racer(&racer);
+            const auto seat = mk64vr::seatPose({racer.player_pos[0][0],racer.player_pos[0][1],racer.player_pos[0][2]},
+                racer.racer_heading,mk64_arm_rigs[std::clamp(racer.racer_character,0,7)].eye_height*std::max(.01f,racer.racer_size)+float(setting("seat_height")),float(setting("seat_forward")));
+            seatSmoother.addTick(viewFromCameraPose(seat),sceneCut);
             // Snapshot focus alongside the workload camera, then sample it at display time.
             const Vec3 lookAt = { state.cam_at[0], state.cam_at[1], state.cam_at[2] };
             const bool cut = camSmoother.addTick(toMat4(info.cameraView), sceneCut, state.frame != 0 ? &lookAt : nullptr);
@@ -760,6 +767,14 @@ public:
 
         if (setting("level_pitch") != 0.0) {
             gameView = levelView(gameView);
+        }
+
+        if (firstPersonVisible()) {
+            if (eyeCameraMatrixId == vr_game_profile_ext_get()->sky_camera_group) {
+                Pose skySeat=cameraPoseFromView(firstPersonView);
+                skySeat.p=viewPosition(gameView); // preserve the native dome centre
+                gameView=viewFromCameraPose(skySeat);
+            } else gameView = firstPersonView;
         }
 
         // The sky's camera (vr_game_profile_ext.h, sky_camera_group): the eye's rotation at the
@@ -1930,6 +1945,7 @@ private:
         else {
             if (recentrePending) {
                 recentrePending = false;
+                firstPersonReset = true;
                 if (recalibrateHeightPending || (!standingHeightValid && (setting("seated") == 0.0))) {
                     standingHeightM = headPose.p.y;
                     standingHeightValid = true;
@@ -1947,7 +1963,7 @@ private:
             // head_translation scales the head's displacement, never the eye offsets (patterns.md).
             const float translation = float(setting("head_translation"));
             headInOrigin.p = { headInOrigin.p.x * translation, headInOrigin.p.y * translation, headInOrigin.p.z * translation };
-            const float seatedCompensation = (setting("seated") != 0.0 && standingHeightValid)
+            const float seatedCompensation = (setting("seated") != 0.0 && setting("first_person") == 0.0 && standingHeightValid)
                 ? (standingHeightM - recentreHeadY) : 0.0f;
             headInOrigin.p.y += float(setting("height_offset")) + seatedCompensation;
         }
@@ -2348,6 +2364,130 @@ private:
         }
     }
 
+    bool hasModelTransforms() const override { return firstPersonVisible(); }
+    void beginModelTransforms() override { firstPersonKartAnchored=false; }
+    void modelTransformAnchor(uint32_t id,const float matrix[16]) override {
+        if(id!=MK64_KART_ANCHOR || !firstPersonVisible())return;
+        firstPersonKartCorrection=mk64vr::kartRegistration(toMat4(matrix),firstPersonView,
+            firstPersonExchange.seat_height,firstPersonExchange.seat_forward);
+        firstPersonKartAnchored=true;
+    }
+    bool modelTransform(uint32_t id, float matrix[16]) override {
+        if (!firstPersonVisible()) return false;
+        if(id==MK64_KART_GROUP && firstPersonKartAnchored) {
+            fromMat4(mul(toMat4(matrix),firstPersonKartCorrection),matrix); return true;
+        }
+        if(id==MK64_ITEM_GROUP) {
+            const int hand=firstPersonExchange.item_hand;
+            if(hand<0 || hand>1 || !firstPersonExchange.hand_valid[hand])return false;
+            const auto& p=firstPersonExchange.hand_pos[hand];
+            const Vec3 world=transformPoint({p[0],p[1],p[2]},rigidInverse(firstPersonView));
+            matrix[12]=world.x;matrix[13]=world.y;matrix[14]=world.z;
+            return true; // Keep the native shell billboard/banana orientation and scale.
+        }
+        Mat4 local;
+        if ((id & 0xFF000000u) == MK64_ARM_GROUP) {
+            const int character=(id>>16)&7, limb=(id>>12)&3, hand=limb/2;
+            if(!firstPersonExchange.hand_valid[hand]) {
+                // Finite, tiny geometry behind the seat; do not make normals singular.
+                local=poseMatrix({{}, {0,0,1}});
+                local.m[0][0]=local.m[1][1]=local.m[2][2]=.00001f;
+            } else {
+                Pose wrist;
+                const auto& p=firstPersonExchange.hand_pos[hand]; const auto& q=firstPersonExchange.hand_rot[hand];
+                wrist.p={p[0],p[1],p[2]}; wrist.q={q[0],q[1],q[2],q[3]};
+                local=mk64vr::armSkinMatrix(character,hand,limb&1,id&31,wrist,float(std::sqrt(double(matrix[0]*matrix[0]+matrix[1]*matrix[1]+matrix[2]*matrix[2]))),firstPersonExchange.seat_height);
+            }
+        } else if(id==MK64_WHEEL_GROUP) {
+            const float a=-firstPersonExchange.wheel_angle;
+            Pose wheel{{0,0,float(std::sin(double(a/2))),float(std::cos(double(a/2)))},
+                {0,-float(setting("wheel_down_m"))*float(setting("world_scale")),-float(setting("wheel_forward_m"))*float(setting("world_scale"))}};
+            local=poseMatrix(wheel);
+            const float scale=float(setting("wheel_radius_m"))*float(setting("world_scale"))/100.f;
+            for(int r=0;r<3;r++)for(int c=0;c<3;c++)local.m[r][c]*=scale;
+        } else return false;
+        fromMat4(mul(local,rigidInverse(firstPersonView)),matrix);
+        return true;
+    }
+    bool firstPersonVisible() const {
+        return setting("first_person") != 0.0 && stereoLatched && !cinemaActive
+            && (gameState().scene == DK64VR_SCENE_GAMEPLAY || settingsPreview);
+    }
+    void updateFirstPerson(const InputSample& s, InputResult& r, bool live) {
+        Mk64Frame racer{}; mk64_vr_get_racer(&racer);
+        const Pose seat=mk64vr::seatPose({racer.player_pos[0][0],racer.player_pos[0][1],racer.player_pos[0][2]},
+            racer.racer_heading,mk64_arm_rigs[std::clamp(racer.racer_character,0,7)].eye_height*std::max(.01f,racer.racer_size)+float(setting("seat_height")),float(setting("seat_forward")));
+        firstPersonView = seatSmoother.ready() ? seatSmoother.sample(scheduler.weight(displayS),float(periodS),CameraSmoothing::Low)
+            : viewFromCameraPose(seat);
+        mk64vr::HandSample hands[2] = {input.handSample(0),input.handSample(1)};
+        const Pose inverseOrigin=poseInverse(origin);
+        for(auto& hand:hands) {
+            hand.pose=poseMul(inverseOrigin,hand.pose);
+            // Raw tracking-space linear velocity, rotated only. No kart velocity or head yaw.
+            hand.velocity=quatRotate(inverseOrigin.q,hand.velocity);
+        }
+        mk64vr::FirstPersonConfig config;
+        config.wheel={0,-float(setting("wheel_down_m")),-float(setting("wheel_forward_m"))};
+        config.radius=float(setting("wheel_radius_m")); config.rimTolerance=float(setting("wheel_grab_m"));
+        config.maxTurn=float(setting("wheel_turn_degrees"))*3.141592653589793f/180.f;
+        config.shoulderZ=float(setting("shoulder_release_m")); config.quietSpeed=float(setting("throw_quiet_mps"));
+        // Explicit process-only diagnostic, bounded to one sequence in force-render standby.
+        const double diagnostic=setting("diag_grip_seconds");
+        bool diagnosticActive=false;
+        int diagnosticStage=-1;
+        if(diagnostic>0 && synthetic && setting("force_render")!=0 && firstPersonVisible()) {
+            if(gripDiagStart==0) gripDiagStart=displayS;
+            const double elapsed=displayS-gripDiagStart;
+            if(elapsed<diagnostic) {
+                diagnosticActive=true;
+                const float phase=float(elapsed/diagnostic);
+                for(int h=0;h<2;h++) { hands[h]={}; hands[h].valid=true; hands[h].pose.p=config.wheel; hands[h].pose.p.x=(h?1:-1)*config.radius; }
+                hands[0].grip=phase>.1f && phase<.9f;
+                // Latch at rest, then turn clockwise: left rim rises, right rim falls.
+                const float turn=std::clamp((phase-.15f)/.2f,0.f,1.f)*.45f;
+                hands[0].pose.p.x=-config.radius*std::cos(turn);
+                hands[0].pose.p.y=config.wheel.y+config.radius*std::sin(turn);
+                diagnosticStage=phase<.1f?0:phase<.3f?1:phase<.65f?2:phase<.8f?3:phase<.9f?4:5;
+                const int testCase=int(setting("diag_grip_case"));
+                hands[1].pose.p={.35f,-.2f,testCase==2 && phase>.65f?.25f:-.3f};
+                if(testCase==1) {hands[1].velocity={0,0,-3};hands[1].velocityValid=true;}
+                if(testCase==3 && phase>.65f)hands[1].valid=false;
+                hands[1].grip=phase>.3f && phase<.8f;
+            }
+        }
+        const bool enabled=firstPersonVisible() && !frozen && !uiCapturing && !vrMenuOpen;
+        const bool active=enabled && (live || diagnosticActive);
+        const bool reset=firstPersonReset || r.recentre || s.menu || s.view || r.vrMenuChord;
+        const auto output=firstPersonControls.update(hands,active,reset,
+            racer.racer_item==1 || racer.racer_item==3 || racer.racer_item==5 || (diagnosticActive && setting("diag_grip_item")!=0),racer.held_item!=0,config);
+        firstPersonReset=false;
+        if(output.steering) r.stickX=output.steer;
+        Mk64VRInteraction exchange{};
+        exchange.enabled=firstPersonVisible(); exchange.item_hand=output.itemHand; exchange.wheel_hands=output.wheelHands;
+        exchange.diagnostic_item=diagnosticActive ? int(setting("diag_grip_item")) : 0;
+        exchange.command=reset || !active ? 3 : output.command; exchange.rear=output.rear; exchange.wheel_angle=output.angle;
+        exchange.world_scale=float(setting("world_scale")); exchange.seat_height=mk64_arm_rigs[std::clamp(racer.racer_character,0,7)].eye_height*std::max(.01f,racer.racer_size)+float(setting("seat_height"));
+        exchange.seat_forward=float(setting("seat_forward"));
+        for(int h=0;h<2;h++) {
+            exchange.hand_valid[h]=active && hands[h].valid;
+            const auto& p=hands[h].pose.p; const auto& q=hands[h].pose.q;
+            exchange.hand_pos[h][0]=p.x*exchange.world_scale; exchange.hand_pos[h][1]=p.y*exchange.world_scale; exchange.hand_pos[h][2]=p.z*exchange.world_scale;
+            exchange.hand_rot[h][0]=q.x; exchange.hand_rot[h][1]=q.y; exchange.hand_rot[h][2]=q.z; exchange.hand_rot[h][3]=q.w;
+        }
+        exchange.velocity[0]=output.velocity.x*exchange.world_scale/30.f;
+        exchange.velocity[1]=output.velocity.y*exchange.world_scale/30.f;
+        exchange.velocity[2]=output.velocity.z*exchange.world_scale/30.f;
+        if(diagnosticActive && (diagnosticStage!=gripDiagStage || exchange.command!=0)) {
+            dk64vr_logf("grip diagnostic case=%d phase=%d command=%d wheel=%d angle=%.3f stick=%.3f item_hand=%d held_type=%d rear=%d valid=%d,%d racer=%.2f,%.2f,%.2f heading=%.3f",
+                int(setting("diag_grip_case")),diagnosticStage,exchange.command,exchange.wheel_hands,exchange.wheel_angle,r.stickX,
+                exchange.item_hand,racer.held_item,exchange.rear,exchange.hand_valid[0],exchange.hand_valid[1],
+                racer.player_pos[0][0],racer.player_pos[0][1],racer.player_pos[0][2],racer.racer_heading);
+            gripDiagStage=diagnosticStage;
+        }
+        firstPersonExchange=exchange;
+        mk64_vr_publish_interaction(&exchange);
+    }
+
     InputConfig inputConfig() const {
         InputConfig c;
         c.rightStickX = (setting("right_stick_x") != 0.0) ? RightStickX::GameCamera : RightStickX::Turn;
@@ -2384,6 +2524,7 @@ private:
         const dk64vr_game_state state = gameState();
         InputContext context;
         context.menuOpen = uiCapturing;
+        context.viewTogglesCamera = state.scene == DK64VR_SCENE_GAMEPLAY && !uiCapturing && !vrMenuOpen;
         // Turning and view-relative movement in third-person play only (first person turns with
         // the head and the game's own aim).
         context.stereoPlay = stereoLatched && !frozen && !cinemaActive && !vrMenuOpen && (state.scene == DK64VR_SCENE_GAMEPLAY);
@@ -2395,7 +2536,7 @@ private:
         else {
             const bool previewContext = vrMenuOpen && stereoLatched && cameraSeen && !probing;
             const bool adjustmentEligible = live && (state.scene == DK64VR_SCENE_GAMEPLAY) && !cinemaActive
-                && (previewContext || (stereoLatched && !frozen && !vrMenuOpen));
+                && (previewContext || (stereoLatched && !frozen && !vrMenuOpen && setting("first_person") == 0.0));
             sfvr_adjust_config adjustmentConfig;
             sfvr_adjust_config_default(&adjustmentConfig);
             const int scaleIndex = dk64vr_settings_index("world_scale");
@@ -2419,6 +2560,13 @@ private:
             }
         }
         InputResult r = mapper.update(s, inputConfig(), context, displayS, dt);
+        if (r.toggleCamera) {
+            dk64vr_settings_set(&settings,"first_person",setting("first_person")==0.0?1.0:0.0);
+            settingsDirty=true; settingsDirtyS=displayS;
+            firstPersonReset=true; seatSmoother.reset(); camSmoother.reset();
+            dk64vr_logf("camera mode: %s (View tap)",setting("first_person")!=0?"first person":"chase");
+        }
+        updateFirstPerson(s,r,live);
         // Diagnostic: right stick X held at diag_turn_stick for 4 s, released for 4 s, in
         // stereo play, as the mapper would turn with it (snap: one step a hold).
         const double turnStick = setting("diag_turn_stick");
@@ -3718,6 +3866,14 @@ private:
     bool autostartBegun = false;
     double gameplaySinceS = 0.0;
 
+    mk64vr::FirstPersonControls firstPersonControls;
+    CameraSmoother seatSmoother;
+    Mat4 firstPersonView, firstPersonKartCorrection;
+    bool firstPersonKartAnchored=false;
+    Mk64VRInteraction firstPersonExchange{};
+    bool firstPersonReset = true;
+    double gripDiagStart = 0;
+    int gripDiagStage=-1;
     XrInput input;
     InputMapper mapper;
     sfvr_adjust_state adjustmentState = {};

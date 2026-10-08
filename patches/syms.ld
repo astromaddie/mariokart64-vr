@@ -78,3 +78,5 @@ recomp_mk64_frame = 0x8F000104;
 recomp_vr_is_active = 0x8F000108;
 recomp_mk64_vr_yaw = 0x8F00010C;
 recomp_mk64_diag_option = 0x8F000110;
+
+recomp_mk64_vr_interaction = 0x8F000114;

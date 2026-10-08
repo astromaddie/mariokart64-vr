@@ -7,6 +7,9 @@ The [private Amped Up racer importer](docs/AMPED_UP.md) adds its 3D racers as a 
 while retaining the original courses and cups. It requires the official v3.21 patch locally.
 Measurements at 2160×2160 per eye and 120 Hz, plus the Frame's per-title settings, are in
 [Frame performance](docs/FRAME_PERFORMANCE.md).
+The optional [first-person controls](docs/VR_ARCHITECTURE.md#first-person-controls) use
+the standard racer's arms, grip steering and physical single-shell/banana releases.
+Tap View during a race to switch first/third person; hold View to recenter.
 
 MarioKart 64: Recompiled is a project that uses [N64: Recompiled](https://github.com/Mr-Wiseguy/N64Recomp) to **statically recompile** MarioKart 64 into a native port with many new features and enhancements. This project uses [RT64](https://github.com/rt64/rt64) as the rendering engine to provide some of these enhancements.
 

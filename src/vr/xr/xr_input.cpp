@@ -95,6 +95,8 @@ bool XrInput::create(XrInstance xrInstance, XrSession xrSession, bool frameProfi
         spaceInfo.action = actions[(hand == 0) ? ActAimLeft : ActAimRight];
         spaceInfo.poseInActionSpace.orientation.w = 1.0f;
         xrCreateActionSpace(session, &spaceInfo, &aimSpace[hand]);
+        spaceInfo.action = actions[hand == 0 ? ActGripLeft : ActGripRight];
+        xrCreateActionSpace(session, &spaceInfo, &gripSpace[hand]);
     }
 
     if (eyeGaze) {
@@ -141,6 +143,8 @@ void XrInput::destroy() {
     gazeAction = XR_NULL_HANDLE;
     gazeValid = false;
     for (int hand = 0; hand < 2; hand++) {
+        if (gripSpace[hand] != XR_NULL_HANDLE) xrDestroySpace(gripSpace[hand]);
+        gripSpace[hand] = XR_NULL_HANDLE;
         if (aimSpace[hand] != XR_NULL_HANDLE) {
             xrDestroySpace(aimSpace[hand]);
             aimSpace[hand] = XR_NULL_HANDLE;
@@ -206,6 +210,7 @@ InputSample XrInput::sample(bool focused, XrSpace space, XrTime time) {
     InputSample s;
     aimValid[0] = aimValid[1] = false;
     gazeValid = false;
+    hands[0] = {}; hands[1] = {};
     if (!focused || (actionSet == XR_NULL_HANDLE)) {
         return s;
     }
@@ -234,6 +239,7 @@ InputSample XrInput::sample(bool focused, XrSpace space, XrTime time) {
     s.view = getBool(ActView);
     s.lBumper = getBool(ActLBumper);
     s.lGrip = getFloat(ActLGrip) >= 0.7f;
+    s.rGrip = getFloat(ActRGrip) >= 0.5f;
     s.rBumper = getBool(ActRBumper);
     s.lStickClick = getBool(ActLStickClick);
     s.rStickClick = getBool(ActRStickClick);
@@ -252,6 +258,30 @@ InputSample XrInput::sample(bool focused, XrSpace space, XrTime time) {
             aimValid[hand] = (location.locationFlags & needed) == needed;
             aim[hand].q = { location.pose.orientation.x, location.pose.orientation.y, location.pose.orientation.z, location.pose.orientation.w };
             aim[hand].p = { location.pose.position.x, location.pose.position.y, location.pose.position.z };
+        }
+    }
+
+    for (int hand = 0; hand < 2; ++hand) {
+        auto& sample = hands[hand];
+        sample.grip = hand == 0 ? s.lGrip : s.rGrip;
+        XrActionStateGetInfo info = { XR_TYPE_ACTION_STATE_GET_INFO };
+        info.action = actions[hand == 0 ? ActGripLeft : ActGripRight];
+        XrActionStateGetInfo gripInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
+        gripInfo.action = actions[hand == 0 ? ActLGrip : ActRGrip];
+        XrActionStateFloat gripState = { XR_TYPE_ACTION_STATE_FLOAT };
+        const bool gripActive=XR_SUCCEEDED(xrGetActionStateFloat(session,&gripInfo,&gripState)) && gripState.isActive;
+        XrActionStatePose state = { XR_TYPE_ACTION_STATE_POSE };
+        XrSpaceVelocity velocity = { XR_TYPE_SPACE_VELOCITY };
+        XrSpaceLocation location = { XR_TYPE_SPACE_LOCATION, &velocity };
+        if (gripSpace[hand] != XR_NULL_HANDLE && XR_SUCCEEDED(xrGetActionStatePose(session, &info, &state)) && state.isActive
+            && XR_SUCCEEDED(xrLocateSpace(gripSpace[hand], space, time, &location))) {
+            const auto needed = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT
+                | XR_SPACE_LOCATION_POSITION_TRACKED_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+            sample.valid = gripActive && (location.locationFlags & needed) == needed;
+            sample.pose = {{location.pose.orientation.x,location.pose.orientation.y,location.pose.orientation.z,location.pose.orientation.w},
+                {location.pose.position.x,location.pose.position.y,location.pose.position.z}};
+            sample.velocityValid = (velocity.velocityFlags & XR_SPACE_VELOCITY_LINEAR_VALID_BIT) != 0;
+            sample.velocity = {velocity.linearVelocity.x,velocity.linearVelocity.y,velocity.linearVelocity.z};
         }
     }
 

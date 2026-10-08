@@ -19,6 +19,21 @@ static const char *const settings_page_side_values[] = { "centre", "left", "righ
 
 // Keys that only this port has. The standard keys live in the sfvr registry.
 static sfvr_setting_key port_keys[] = {
+#ifdef VR_GAME_RACER
+    { "first_person", SFVR_SETTING_BOOL, 0, 0, 1, NULL },
+    { "seat_height", SFVR_SETTING_FLOAT, 0.0, -3.0, 5.0, NULL },
+    { "seat_forward", SFVR_SETTING_FLOAT, 0.0, -5.0, 5.0, NULL },
+    { "wheel_down_m", SFVR_SETTING_FLOAT, .28, .1, .8, NULL },
+    { "wheel_forward_m", SFVR_SETTING_FLOAT, .28, .15, 1.0, NULL },
+    { "wheel_radius_m", SFVR_SETTING_FLOAT, .18, .08, .4, NULL },
+    { "wheel_grab_m", SFVR_SETTING_FLOAT, .12, .04, .25, NULL },
+    { "wheel_turn_degrees", SFVR_SETTING_FLOAT, 60, 20, 120, NULL },
+    { "shoulder_release_m", SFVR_SETTING_FLOAT, .12, .05, .4, NULL },
+    { "throw_quiet_mps", SFVR_SETTING_FLOAT, .35, .1, 1, NULL },
+    { "diag_grip_seconds", SFVR_SETTING_FLOAT, 0, 0, 30, NULL },
+    { "diag_grip_item", SFVR_SETTING_INT, 0, 0, 5, NULL },
+    { "diag_grip_case", SFVR_SETTING_INT, 0, 0, 3, NULL },
+#endif
 	// Shared renderer options. MK64 overrides unverified port defaults below.
 	{ "foveation", SFVR_SETTING_ENUM, 3.0, 0.0, 3.0, foveation_values },
 	{ "foveation_eye_tracked", SFVR_SETTING_BOOL, 1.0, 0.0, 1.0, NULL },
