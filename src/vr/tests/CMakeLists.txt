@@ -45,3 +45,5 @@ target_compile_options(rt64_vr_eye_slots_test PRIVATE -Wall -Wextra)
 add_test(NAME rt64_vr_eye_slots_test COMMAND rt64_vr_eye_slots_test)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME mk64_render_contract COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/render_contract.py)
+
+add_test(NAME mk64_racer_diagnostic COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/diagnostic_walk_test.py)

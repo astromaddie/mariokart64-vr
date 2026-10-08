@@ -312,7 +312,15 @@ During that bounded run, `[mk64-diag] racer` samples the actual nested display l
 emitted by each visible racer once per second: player/character, commands,
 triangles, matrices, list count, effect bits and live RGB. A depth/command limit
 reports `truncated=1`, so an incomplete traversal cannot look like a valid primitive
-count. Compare Wario/Mario and all eight characters with the previous NRM under
+count. The top-level span must lie in the active `gfxPoolExtended` allocation
+(`patches/gfx_config.c`); it is above retail 8 MiB RDRAM. Nested lists accept only
+aligned addresses within N64ModernRuntime's mapped 512 MiB KSEG0 range, with
+checked 16-entry segment lookup and non-wrapping physical base/offset addition.
+The log includes `begin`, `end`, `stopped_at`, and `failure`: 0 is complete,
+1 invalid address, 2 recursion limit, 3 command budget, 4 invalid top-level span.
+The host regression executes the actual walker with only its raw RDRAM read
+adapted to host memory, covering expanded-pool counts and each bounded failure.
+Compare Wario/Mario and all eight characters with the previous NRM under
 the same scene/camera, and inspect both-eye images. Capture several star phases,
 Moo Moo Farm side/pass views (with head roll), live timer and completed-lap cells.
 Keep one run with all new scene options unset for simulation parity. Host/source
