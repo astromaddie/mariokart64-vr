@@ -87,11 +87,28 @@ int main(){
         const bool fused=racer==3;
         Vec3 pivot{rig.wrist[0]*side,rig.wrist[1],rig.wrist[2]};
         if(fused){pivot.x+=rig.elbow[0]*side;pivot.y+=rig.elbow[1];pivot.z+=rig.elbow[2];}
+        const Vec3 palm=pivot;
+        pivot.z+=rig.grip_forward;
+        const float sourceHandMaxZ[8]={547,547,331,279,367,535,400,361};
+        assert(pivot.z<sourceHandMaxZ[racer]);
         Pose target{{},{(hand?1.f:-1.f)*c.radius*10.f,c.wheel.y*10.f,c.wheel.z*10.f}};
         auto skin=armSkinMatrix(racer,hand,fused?0:1,31,target,.005f,rig.eye_height);
         Vec3 grip=transformPoint(pivot,skin);
         assert(near(grip.x,target.p.x,.005f) && near(grip.y,target.p.y,.005f) && near(grip.z,target.p.z,.005f));
+        Vec3 shownPalm=transformPoint(palm,skin);
+        assert(near(shownPalm.z-target.p.z,rig.grip_forward*.005f,.005f));
+        assert(rig.grip_forward<=50 && rig.grip_forward>=28);
         Vec3 width=transformDir({1,0,0},skin);assert(near(std::sqrt(dot(width,width)),.005f,.00001f));
+        // Rotating an off-wheel hand rotates the source contact calibration too;
+        // the item/controller target itself stays exactly at the grasp contact.
+        target.q=quatFromYaw(.8f);target.p={hand?3.f:-3.f,-2.f,-3.f};
+        skin=armSkinMatrix(racer,hand,fused?0:1,31,target,.005f,rig.eye_height);
+        grip=transformPoint(pivot,skin);
+        assert(near(grip.x,target.p.x,.005f) && near(grip.y,target.p.y,.005f) && near(grip.z,target.p.z,.005f));
+        shownPalm=transformPoint(palm,skin);
+        Vec3 offset=quatRotate(target.q,{0,0,rig.grip_forward*.005f});
+        assert(near(shownPalm.x-target.p.x,offset.x,.005f) && near(shownPalm.z-target.p.z,offset.z,.005f));
+
         target.p={1000000,1000000,1000000};
         skin=armSkinMatrix(racer,hand,fused?0:1,31,target,.005f,rig.eye_height);
         grip=transformPoint(pivot,skin);assert(std::sqrt(dot(grip,grip))<25);

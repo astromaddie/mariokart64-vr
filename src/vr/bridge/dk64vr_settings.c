@@ -24,7 +24,7 @@ static sfvr_setting_key port_keys[] = {
     { "seat_height", SFVR_SETTING_FLOAT, 0.0, -3.0, 5.0, NULL },
     { "seat_forward", SFVR_SETTING_FLOAT, 0.0, -5.0, 5.0, NULL },
     { "wheel_down_m", SFVR_SETTING_FLOAT, .28, .1, .8, NULL },
-    { "wheel_forward_m", SFVR_SETTING_FLOAT, .25, .15, 1.0, NULL },
+    { "wheel_forward_m", SFVR_SETTING_FLOAT, .28, .15, 1.0, NULL },
     { "wheel_radius_m", SFVR_SETTING_FLOAT, .18, .08, .4, NULL },
     { "wheel_grab_m", SFVR_SETTING_FLOAT, .12, .04, .25, NULL },
     { "wheel_turn_degrees", SFVR_SETTING_FLOAT, 60, 20, 120, NULL },

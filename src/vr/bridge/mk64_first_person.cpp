@@ -125,7 +125,10 @@ Mat4 armSkinMatrix(int character, int hand, int lower, int weight, const Pose& w
     auto toSeat=[&](Vec3 a){return Vec3{-a.x*modelScale,a.y*modelScale,-a.z*modelScale};};
     Vec3 shoulder=toSeat(add({rig.base[0],rig.base[1],rig.base[2]},sourceShoulder)); shoulder.y-=eyeHeight;
     const float upperLength=length(sourceElbow)*modelScale, lowerLength=length(sourceWrist)*modelScale;
-    auto solved=solveArm(shoulder,wrist.p,upperLength,lowerLength,{hand?1.f:-1.f,-.5f,.4f},wrist.q);
+    // The controller/item point is the authored hand's grasp contact, not its palm
+    // centre. Move only the skin's palm behind that contact in tracked hand axes.
+    const Vec3 palmTarget=add(wrist.p,quatRotate(wrist.q,{0,0,rig.grip_forward*modelScale}));
+    auto solved=solveArm(shoulder,palmTarget,upperLength,lowerLength,{hand?1.f:-1.f,-.5f,.4f},wrist.q);
     const Quat rest=quatFromYaw(3.141592653589793f);
     const Quat upperQ=quatMul(fromTo(toSeat(sourceElbow),sub(solved.elbow,shoulder)),rest);
     const Quat lowerQ=quatMul(fromTo(toSeat(sourceWrist),sub(solved.wrist,solved.elbow)),rest);
