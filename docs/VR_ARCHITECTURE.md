@@ -381,6 +381,8 @@ while the other holds an item; no wheel grips restores left-stick steering.
 Existing accelerator, brake, drift and item buttons remain available. Wheel
 steering uses the calibrated seat frame, so looking sideways does not steer.
 First-person grips reserve camera adjustment for the settings preview.
+During a race, a short View tap switches between first-person and chase views;
+holding View for one second recentres without switching view on release.
 
 The over-shoulder variant raises a held item beside either shoulder and releases
 it during a backward swing. Direction is measured in the calibrated kart/seat
@@ -400,8 +402,14 @@ across elbow and wrist transforms. Other racers retain rigid upper arms and
 weighted forearm/hand transforms. A bounded display-list walk tags original
 vertices into 32 weight bins; the renderer resolves two-bone elbow IK and tracked
 wrist orientation at presentation time. No replacement glove artwork is supplied.
-The local head/body are hidden, the original kart remains, and other racers render
-normally. The added steering rim shares its dimensions with grip hit-testing.
+Only local head/body geometry is hidden: its material/state commands still execute
+so the arms retain the authored colours and textures. The added wheel saves and
+restores render state. Palm contacts sit 2.5 cm behind the grasp point (1.4 cm for
+Toad), with controller/item targets and hand width unchanged. Bone-axis extension
+is bounded at 2.5 times the source length. The wheel stays 28 cm forward and 28 cm
+below the seat anchor. The original kart remains, including the dark floorboard
+visible inside the wheel, and other racers render normally. The added steering
+rim shares its dimensions with grip hit-testing.
 
 Reusable prior art is F-Zero's vehicle seat anchor and Halo's
 `vr_drive_input` wheel mapping and `vr_solve_arm` two-bone solver. MK64 locates
@@ -430,18 +438,62 @@ While tracking is invalid, the item retains its last trusted seat-local attachme
 and follows kart movement and turning. A delayed pickup without a trusted hand pose
 starts at the native held position; invalid zero poses cannot replace it.
 
+Item artwork still comes from the retail renderer: green/red shells use sprites,
+and bananas use their original simple geometry. The official Amped Up v3.21 patch
+also contains 3D green/red-shell and banana models; those custom item renderers
+are separate from the racer renderer imported here. Local inspection evidence,
+tied to the ROM hash, is in
+`build/amped_up/{green-shell,banana}-model-evidence.json`.
+
 Eight host suites pass, including production grip latching, clockwise steering,
 quiet/forward/rear releases, invalid-tracking recovery, View tap/hold routing and
 all-eight skin transforms. The regenerated MIPS animation harness passes 2,192
-cases and 19,728 limbs in both ordinary and first-person emission, including
-Toad's distal tags and exactly one local kart anchor. The regenerated item harness
+cases: ordinary emission visits 19,728 limbs; the first-person state-comparison
+pass visits 22,176, including extra original traversals to compare material state.
+It verifies Toad's distal tags, exactly one local kart anchor, and matching authored
+material state for all eight racers. The regenerated item harness
 passes native spawn/state/velocity/destruction checks and 35 ticks of rear red
 flight versus ordinary forward homing. Terrain and audio services are stubbed in
 that harness; these checks do not certify rendered or worn play.
 
-The complete ARM64 build, flat OFF build, package and native Frame validation are
-pending at this source revision. Native acceptance requires submitted stereo
-captures with synthetic grip poses and a fresh 2160-square/120 Hz measurement;
-worn acceptance additionally requires a race covering steering, physical throws,
-quiet releases and recovery. Local evidence is in ignored
-`build/first-person-evidence/` and `build-linux-vr-validation/first-person/`.
+Source `c96cf7e` with RT64 `8e5e3907` passes complete ARM64 VR ON and flat OFF
+builds, package/ABI checks, and exact post-smoke payload inventories (42 VR files,
+41 flat), plus their generated build-provenance JSON sidecars.
+Both container UI smokes stay open until the expected timeout (124); they record
+a D-Bus assertion during teardown. Earlier intermittent smoke exits of 139 remain
+unlocated; a separate captured teardown abort does not establish their cause.
+
+Native Steam launches on the Frame pass 12 synthetic item cases: quiet, forward,
+rear and tracking-loss cases for each of banana, green shell and red shell.
+Stereo captures cover arm/material rendering across all eight racers. Six racers
+have front item-holding poses; Yoshi and Peach have rear-arm poses. Native logs
+confirm rear releases and retained held actors during tracking loss. The loss
+cases invalidate a front-held hand, so behind-shoulder loss safety remains a
+source/harness check. Rear projectile imagery is too ambiguous to accept as
+visible banana/green-shell flight. A fresh chase capture shows the complete local
+racer/kart without the added wheel; an initially retrieved stale capture was
+rejected and preserved separately.
+
+With eye readback/captures disabled, the stationary first-person gesture run
+holds 120.0 FPS at 2160 x 2160 per eye with zero missed frames in its settled
+windows and 2.98 to 3.79 ms stereo GPU time. These measurements do not establish
+moving-race or worn performance.
+
+The Frame's normal `MarioKart64VR` Steam entry now launches
+`LAUNCH-STEAM-FRAME.sh --game mk64` with the correct `MK64FrameVR` data folder.
+Its profile enables first-person, keeps the wheel 28 cm forward, and disables
+diagnostics. Normal startup confirms the original ROM, standard Amped Up mod,
+26 input actions, all three controller profiles, and OpenXR READY/SYNCHRONIZED at
+2160-square/120 Hz. The existing 19 Frame binding sources and two aim poses are
+preserved; right squeeze and two grip poses are added. Snapshot restoration
+verifies preexisting install extras and prior captures before normal startup;
+saves and ROM/mod bytes retain their snapshot hashes afterward. Startup adds the
+new default settings without arming diagnostics.
+Steam's stale active shortcut was refreshed through its registration tool.
+After SIGTERM/SIGINT had no effect on the idle launch, only its verified Steam
+app scope was stopped; the process is gone and the shared Frame lease is released.
+
+Worn steering, physical throws, View-button operation, hand comfort and recovery
+remain untested. Local evidence is in ignored
+`build/first-person-evidence/` and
+`build-linux-vr-validation/first-person/candidate-c96cf7e/`.
