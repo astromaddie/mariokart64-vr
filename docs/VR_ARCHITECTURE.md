@@ -31,8 +31,15 @@ and all eight players. Actual submitted eye/HUD images were inspected at yaw 0/9
 The final clean-source package `dbcd585e…7850ca2` also passed a native 60-second stock run
 with the saved 0.05 m near plane: its 38 common simulation samples at frames 630–1740
 matched the same flat baseline, and its submitted eye image retained the corrected floor.
-The user authorized proceeding with controllers assumed to work; controller and wearer
-playtesting remain unverified. Only Luigi Raceway has unattended game-scene coverage.
+The user subsequently reached and completed a race while wearing the predecessor
+build, reporting costume, racer-detail, billboard, star and HUD issues. The revised
+application is built from `f1ee10c450d91fdeb0d79e19c3691e2d00623bb7`, SHA256
+`d8ffc8aacc5d0b88c7fddf68f39f8b0d92e2d073ede72460564081636efc93ec`, with external
+standard/full-detail model NRM `26a3afd6…`. Native all-eight-racer draws, Mario
+front appearance, Wario star onset/expiry, and translated Moo Moo Farm billboard
+views were inspected. Mario Raceway, Luigi Raceway and Moo Moo Farm have unattended
+scene coverage; full-course driving and the revised build's worn acceptance remain
+pending. See [model checks](AMPED_UP.md#native-checks-after-wearer-feedback).
 
 ## Camera and simulation
 
@@ -167,13 +174,13 @@ device was unworn. The probe does not render game content and is not evidence of
 | Steam Frame install and flat launch | Attract racing verified unattended | Native original package `d6d40e9c…26d`; Gamescope capture shows Yoshi Valley split-screen attract race |
 | Modern flat race and rates | Verified unattended | Real 1P Luigi Raceway via scripted original menus;30 game frames and 60 VI per second; data outside the package |
 | Standalone Vulkan OpenXR colour probe | GPU readback and submission passed | SteamVR/OpenXR 2.17.10, Turnip Adreno 750, two 1728×1728 sRGB swapchains with UNORM views; distinct uniform colors verified across the submitted images |
-| Native VR build, package and ABI | Passed | Final clean-source package `dbcd585e…7850ca2`; GLIBC 2.35 maximum; actual native 1P eye/HUD submission |
-| Bridge/profile/retained-eye tests | Passed | Four host suites plus seven sfvr suites; production scene classifier, controller mapping and head-independent steering |
+| Native VR build, package and ABI | Passed | Clean `f1ee10c` package `d8ffc8aa…6efc93ec`; GLIBC 2.35 maximum; native eye/HUD submission |
+| Bridge/profile/retained-eye tests | Passed | Seven VR host suites, including production grid/roster, bounded head pose and display-list diagnostics; original sfvr checks retained |
 | Stereo gameplay and simulation parity | Verified unattended | Cardinal-view candidate matched all 68 common simulation samples at frames 630–2640; final package matched all 38 samples at 630–1740 and exited cleanly at 60s |
 | Viewport, HUD and full-course coverage | Luigi Raceway cardinal views and HUD inspected; broader coverage pending | Actual yaw 0/90/180/270 eye images and settled HUD; intro cinema transition confirmed; 0.05 m near-plane floor correction inspected separately |
-| Private Amped Up 3D racers | Built, installed and native rendering verified unattended | Final external NRM `4ba53056…2437a8`; 269 model lists validated, ten importer tests passed, submitted eyes/HUD inspected and 38 final simulation samples matched stock |
-| 2160×2160 per eye at 120 Hz | Verified unattended on Luigi Raceway | Three 90-second runs with the final model mod; actual 8.333 ms period, twelve settled windows at 120.0 presentations/s with zero missed periods, approximately 3.1 ms both-eye GPU; 68 simulation samples matched stock per run. See [performance details](FRAME_PERFORMANCE.md). |
-| User headset play | Not started | Unworn submitted GPU images inspected; controllers assumed by user request; wearer playtesting remains pending |
+| Private Amped Up 3D racers | Standard/full-detail set installed and rendered | External NRM `26a3afd6…`; all eight native racers use 14 matrices with complete walks; 14 importer checks and 2,192 actual animation traversal cases pass |
+| 2160×2160 per eye at 120 Hz | Verified unattended on Luigi Raceway | Revised full-detail model package and LOW smoothing: clean 90s run, five settled windows at 120.0/s with zero misses, 3.10–3.69 ms both-eye GPU, 68/68 stock samples match. See [performance details](FRAME_PERFORMANCE.md). |
+| User headset play | Predecessor race completed; revised package retest pending | User reported the prioritized rendering issues after a completed race; revised native captures do not certify worn comfort or a full lap |
 
 ## Reproduction
 
@@ -260,7 +267,7 @@ The runtime reported 72 Hz presentation and 30 Hz simulation, with approximately
 2.4 ms GPU time for both eyes in the sampled steady scene. These checks used forced
 rendering while unworn; they do not establish wearer comfort or controller operation.
 
-The final model NRM SHA256 is
+The initial model NRM SHA256 was
 `4ba53056ba7428b99d2aa189e1bf662fdfc8ab1d7b7ad951bfd358d8bd2437a8`.
 After the final literal-root coverage repair, this artifact completed a separate
 60-second native VR run. Both submitted eyes and the HUD were inspected again,
@@ -345,3 +352,13 @@ the same scene/camera, and inspect both-eye images. Capture several star phases,
 Moo Moo Farm side/pass views (with head roll), live timer and completed-lap cells.
 Keep one run with all new scene options unset for simulation parity. Host/source
 tests and these diagnostic counts do not replace native images or a worn check.
+
+
+Native follow-up used the fixed fresh-grid entry and rendered all eight distinct
+racers with complete 14-matrix articulated paths. Mario's front texture and Wario's
+standard outfit/star phases were inspected. Moo Moo Farm's cow/tree quads remain
+upright and visible from a common head shifted 3 m sideways at yaw 90; this is
+static translation evidence, not a worn pass or completed lap. The live HUD capture
+shows complete timer cells; completed-lap timing still needs a race retest. The
+normal saved profile remains LOW smoothing, automatic 2160-square eyes, 120 Hz,
+0.05 m near plane and billboard facing enabled. All diagnostics are process-only.

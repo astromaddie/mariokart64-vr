@@ -1,5 +1,32 @@
 # Steam Frame performance measurements
 
+## Revised standard/full-detail racers
+
+The native application built from `f1ee10c450d91fdeb0d79e19c3691e2d00623bb7`
+(SHA256 `d8ffc8aacc5d0b88c7fddf68f39f8b0d92e2d073ede72460564081636efc93ec`)
+with external model NRM `26a3afd600aeb5c6b56857443bb197bd85da633439617a3c17856083d12a02c7`
+was measured through the same Steam title at 2160×2160 per eye and actual 120 Hz,
+with saved LOW camera smoothing and foveation off.
+
+A selector-free 90-second Luigi Raceway run with image readback disabled produced
+five settled stereo windows, each at 120.0 presentations/s with zero missed
+predicted periods. Both-eye GPU times were 3.69, 3.17, 3.10, 3.29 and 3.47 ms.
+The full CPU/display period was 8.33 ms, including `xrWaitFrame`. All 68 common
+simulation samples at game frames 630–2640 exactly matched the stock flat baseline
+across game state, race clock, all-player digest, player position/speed/lap/rank.
+
+A preceding run with image readback had occasional single misses and 119.8–120.0
+presentations/s; those capture windows are not counted as zero-miss results.
+These are unattended, stationary-player measurements with AI advancing. Full-race
+loads, extended thermals and the revised package's worn comfort remain unmeasured.
+
+The clean native log SHA256 is
+`9ed5036416106d89b591462187a12153a929fe6a3375532a42b8e78b4338489b`;
+local evidence and `simulation-parity.json` are under ignored
+`build-linux-vr-validation/wear-fixes/candidate/f1ee10c…/perf-noreadback/`.
+
+## Earlier model-package measurements
+
 2160×2160 per eye at an actual 120 Hz passed three native 90-second runs with the
 Amped Up 3D racers enabled. These runs used camera smoothing off. The selected Frame
 profile uses that resolution and rate, with foveation off; the subsequent camera

@@ -108,4 +108,51 @@ segment `d36ed4d039d2f9314605a88a65c75812172e33d76a0b99d33a05fb9430a9d3d5`.
 Its importer passes 14 checks and both pinned mod compilation tools produce 14
 functions. The candidate and selector/import/build provenance are under ignored
 `build-linux-vr-validation/wear-fixes/mod/`. These are source/package/host checks;
-native all-racer images, star phases and performance remain distinct acceptance.
+native all-racer images, star phases and performance are recorded separately below.
+
+
+## Native checks after wearer feedback
+
+The Frame application built from `f1ee10c450d91fdeb0d79e19c3691e2d00623bb7`
+(SHA256 `d8ffc8aacc5d0b88c7fddf68f39f8b0d92e2d073ede72460564081636efc93ec`)
+loads the corrected external `26a3afd6…` NRM. A native mixed-field race emitted
+all eight distinct characters with full articulated geometry:
+
+| Character | Native triangles | Matrices | Display lists |
+| --- | ---: | ---: | ---: |
+| Mario | 802 | 14 | 54 |
+| Luigi | 732 | 14 | 54 |
+| Yoshi | 663 | 14 | 61 |
+| Toad | 575 | 14 | 50 |
+| Donkey Kong | 657 | 14 | 62 |
+| Wario | 737 | 14 | 71 |
+| Peach | 633 | 14 | 54 |
+| Bowser | 771 | 14 | 54 |
+
+Every traversal reported zero truncation and failure. Earlier native comparisons
+used one matrix for Mario/Wario; the new package uses the articulated roots,
+including their 173/168-triangle head limbs. These are the author's full N64
+meshes, with their original textures. Wario's yellow/purple outfit and Mario's
+standard cap/face were inspected in submitted images.
+
+The initial arbitrary-course diagnostic skipped the retail GP grid initialization
+on a later cup index, producing duplicated Mario opponents and invalid Bowser
+positions. Old and disabled model packages reproduced that failure. The corrected
+original debug-course entry initializes the complete roster; native Bowser and
+all eight renderers now pass. This diagnostic correction does not change normal
+race initialization.
+
+A native Wario star sequence captured normal appearance, several coloured/dithered
+active phases, and normal appearance after expiry; live RGB changes were logged
+with effect bit `0x200`. A white patch in rear views remained in a private diagnostic
+which removed only Mario's 173 head triangles (629 native triangles, 14 matrices).
+The patch is exhaust smoke, also identified by the user, rather than head material.
+That diagnostic package was
+removed and the complete `26a3afd6…` package restored.
+
+Evidence is under ignored `build-linux-vr-validation/wear-fixes/candidate/f1ee10c…/`
+and `wear-fixes/diagnostic-head-hidden/`. A separate selector-free 90-second Luigi
+Raceway run matched all 68 stock simulation samples and held 120 Hz at 2160×2160
+per eye in five settled windows with zero missed periods. See
+[performance measurements](FRAME_PERFORMANCE.md). These are unattended captures
+with a stationary player; the revised package still needs a worn race retest.
