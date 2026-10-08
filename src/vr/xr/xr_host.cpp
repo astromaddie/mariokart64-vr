@@ -46,6 +46,7 @@
 #include "sfvr/sfvr_adjust.h"
 #include "sfvr/sfvr_perf.h"
 #include "../diag/dk64vr_diag.h"
+#include "../diag/mk64_diag_pose.h"
 #include "../menu/dk64vr_menu_ui.h"
 #include "xr_input.h"
 #include "xr_foveation.h"
@@ -1480,6 +1481,13 @@ private:
             int(setting("diag_force_stereo")), int(setting("timing")));
         logCameraSettings();
         diagYawDeg = float(setting("diag_yaw"));
+        if (diagHeadOffset.enabled) {
+            dk64vr_logf("diagnostic head offset %.3f %.3f %.3f m; requires force_render and synthetic standby head, through game frame %u",
+                diagHeadOffset.metres.x, diagHeadOffset.metres.y, diagHeadOffset.metres.z, diagHeadOffset.lastGameFrame);
+        }
+        else if (diagHeadOffset.requested) {
+            dk64vr_logf("diagnostic head offset ignored: requires integer MK64_DIAG_AUTOSTART in 1..120 and finite XYZ in -20..20 m");
+        }
         nextDumpFrame = uint64_t(setting("dump_frame"));
 
         billboardGroupList.clear();
@@ -1947,6 +1955,13 @@ private:
         Pose yaw;
         yaw.q = quatFromYaw(diagYawDeg * 3.1415926f / 180.0f);
         headInOrigin = poseMul(yaw, headInOrigin);
+        // Translate the shared head after diagnostic yaw, in game-camera axes.
+        // Compose both measured eye offsets afterward, preserving IPD and the
+        // common centre used by head-facing world billboards.
+        if (diagHeadOffset.enabled) {
+            headInOrigin = mk64vrdiag::offsetHead(headInOrigin, diagHeadOffset,
+                setting("force_render") != 0.0, synthetic, gameState().frame);
+        }
         headInOriginQ = headInOrigin.q;
         mk64_vr_set_yaw(quatYaw(headInOriginQ));
         for (uint32_t eye = 0; eye < 2; eye++) {
@@ -3650,6 +3665,9 @@ private:
     FovTangents eyeFov[2];
     XrFovf eyeXrFov[2] = {};
     float diagYawDeg = 0.0f;
+    const mk64vrdiag::HeadOffset diagHeadOffset = mk64vrdiag::parseHeadOffset(
+        std::getenv("MK64_DIAG_AUTOSTART"), std::getenv("MK64_DIAG_HEAD_X"),
+        std::getenv("MK64_DIAG_HEAD_Y"), std::getenv("MK64_DIAG_HEAD_Z"));
     float hudDumpYawDeg = 0.0f;
     bool diagYawStepPending = false;
 

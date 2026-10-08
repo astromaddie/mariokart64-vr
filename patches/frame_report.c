@@ -13,12 +13,21 @@ int mk64_diag_racers_enabled;
 static void diagnostic_scene(unsigned int frame) {
     static int loaded, character, course, star_at, limit;
     static int selected, star_used;
+    static int debug_entry_active, saved_debug_menu;
     if (!loaded) {
         character = recomp_mk64_diag_option(0);
         course = recomp_mk64_diag_option(1);
         star_at = recomp_mk64_diag_option(2);
         limit = recomp_mk64_diag_option(3);
         loaded = 1;
+    }
+    // An arbitrary GP course needs the native debug-course entry's fresh grid
+    // and AI initialization, even when its cup index is not zero. Restore the
+    // process-only flag immediately after initialization or an aborted entry.
+    if (debug_entry_active && (gGamestate == 4 || gGamestateNext != 4 ||
+        limit < 0 || frame > (unsigned int)limit)) {
+        gDebugMenuSelection = saved_debug_menu;
+        debug_entry_active = 0;
     }
     mk64_diag_racers_enabled = limit >= 0 && frame <= (unsigned int)limit &&
         gGamestate == 4 && !gDemoMode && gCourseTimer > 0.0f && (frame % 30) == 0;
@@ -41,6 +50,11 @@ static void diagnostic_scene(unsigned int frame) {
                 }
             }
             if (!found) recomp_printf("[mk64-diag] rejected course=%d: requires a retail Grand Prix course\n", course);
+            else if (gModeSelection == GRAND_PRIX) {
+                saved_debug_menu = gDebugMenuSelection;
+                gDebugMenuSelection = DEBUG_MENU_OPTION_SELECTED;
+                debug_entry_active = 1;
+            }
         }
         selected = 1;
         if (character >= 0 || course >= 0)

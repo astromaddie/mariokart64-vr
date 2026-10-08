@@ -47,3 +47,10 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME mk64_render_contract COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/render_contract.py)
 
 add_test(NAME mk64_racer_diagnostic COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/diagnostic_walk_test.py)
+add_executable(mk64_diagnostic_pose diagnostic_pose_test.cpp ../bridge/dk64vr_math.cpp
+    ${DK64VR_ROOT}/third_party/sfvr/src/sfvr_camera.c)
+target_include_directories(mk64_diagnostic_pose PRIVATE ../bridge ${DK64VR_ROOT}/lib/rt64/src
+    ${DK64VR_ROOT}/third_party/sfvr/include)
+target_compile_options(mk64_diagnostic_pose PRIVATE -Wall -Wextra)
+add_test(NAME mk64_diagnostic_pose COMMAND mk64_diagnostic_pose)
+add_test(NAME mk64_diagnostic_scene COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/diagnostic_scene_test.py)

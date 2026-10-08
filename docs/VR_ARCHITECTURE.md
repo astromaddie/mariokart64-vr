@@ -307,6 +307,26 @@ Prix courses are accepted (Moo Moo Farm is 9); unsupported battle courses are
 logged and rejected. Star is used once through `apply_star_sound_effect`, after
 race start. No option is read without enabled autostart, no selection is persisted,
 and diagnostics stop after at most 120 seconds of game frames.
+An arbitrary Grand Prix course uses the original debug-course entry flag only
+during initialization, then restores the previous flag at the first race frame
+(or cancellation/expiry). Otherwise entering a later cup index from a fresh menu
+would reuse uninitialized previous-race AI and grid arrays. The regression executes
+the production diagnostic and retail setup/spawn selection for all eight characters
+on all 16 supported courses, checking a complete unique roster and grid.
+
+For native front/side material and translated-billboard captures, the process-only
+`MK64_DIAG_HEAD_X`, `MK64_DIAG_HEAD_Y`, and `MK64_DIAG_HEAD_Z` add metres in the
+game camera's axes: X right, Y up, Z backward. For example, with
+`MK64_DIAG_AUTOSTART=90 MK64_VR_FORCE_RENDER=1`, `MK64_DIAG_HEAD_X=3` moves the
+viewpoint to the right and `MK64_DIAG_HEAD_Z=-10` moves it forward. Pair the
+translation with the existing diagnostic yaw to look back toward the racer.
+The entire offset is rejected if autostart is not an integer in 1..120, or any
+supplied axis is malformed, nonfinite, or outside -20..20 metres. Missing axes
+default to zero. Application also requires `force_render` and a synthetic standby
+head; wearing the headset leaves the tracked head unchanged. It stops after the
+autostart game-frame limit. The offset is added to the shared head after yaw and
+before measured eye offsets, preserving tracked motion, IPD and the common
+head-centre billboard viewpoint. It is never saved or exposed in the settings UI.
 
 During that bounded run, `[mk64-diag] racer` samples the actual nested display lists
 emitted by each visible racer once per second: player/character, commands,
