@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstring>
+#include <cstdio>
 #include "../game/mk64_scene.h"
 #include "vr_game_profile.h"
 #include "vr_game_profile_ext.h"
@@ -60,9 +61,10 @@ int main() {
     assert(dk64vr_settings_get(&settings,"wheel_smoothing_ms")==60);
     const char* custom="version=1\n[vr]\nport_schema=6\nwheel_forward_m=0.52\nwheel_turn_degrees=80\nwheel_smoothing_ms=500\n";
     dk64vr_settings_parse(&settings,custom,std::strlen(custom));
-    assert(std::fabs(dk64vr_settings_get(&settings,"wheel_forward_m")-.52)<1e-6);
-    assert(dk64vr_settings_get(&settings,"wheel_turn_degrees")==80);
-    assert(dk64vr_settings_get(&settings,"wheel_smoothing_ms")==200);
+    // parse updates file_values; the loader separately publishes effective values.
+    assert(std::fabs(settings.file_values[dk64vr_settings_index("wheel_forward_m")]-.52)<1e-6);
+    assert(settings.file_values[dk64vr_settings_index("wheel_turn_degrees")]==80);
+    assert(settings.file_values[dk64vr_settings_index("wheel_smoothing_ms")]==200);
     dk64vr_settings_set(&settings,"wheel_smoothing_ms",-1);
     assert(dk64vr_settings_get(&settings,"wheel_smoothing_ms")==0);
     dk64vr_settings_free(&settings);
@@ -86,4 +88,5 @@ int main() {
     assert(std::fabs(result.stickX - turned.stickX) < 1e-6f && std::fabs(turned.stickY) < 1e-6f);
     sample.valid = false;
     assert(mapper.update(sample, config, context, .042, .014f).buttons == 0);
+    std::puts("PASS MK64 profile/settings: wheel defaults, custom file values, smoothing clamps, input routing");
 }
