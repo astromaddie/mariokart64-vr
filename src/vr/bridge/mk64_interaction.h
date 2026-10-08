@@ -6,8 +6,9 @@ namespace mk64vr {
 using namespace dk64vr;
 struct HandSample { bool valid = false, grip = false; Pose pose; Vec3 velocity; bool velocityValid = false; };
 struct FirstPersonConfig {
-    Vec3 wheel{0, -.28f, -.28f}; float radius = .18f, rimTolerance = .12f;
-    float maxTurn = 1.05f, shoulderZ = .12f, quietSpeed = .35f;
+    Vec3 wheel{0, -.28f, -.40f}; float radius = .18f, rimTolerance = .12f;
+    float maxTurn = 1.57079632679f, steeringSmoothingS = .060f;
+    float shoulderZ = .12f, quietSpeed = .35f;
 };
 struct FirstPersonOutput {
     bool steering = false; float steer = 0, angle = 0; int wheelHands = 0;
@@ -17,10 +18,10 @@ struct FirstPersonOutput {
 class FirstPersonControls {
 public:
     FirstPersonOutput update(const HandSample hands[2], bool active, bool reset,
-        bool itemAvailable, bool itemHeld, const FirstPersonConfig& config);
+        bool itemAvailable, bool itemHeld, const FirstPersonConfig& config, float deltaSeconds = 0.f);
 private:
     bool armed[2]{}, previous[2]{}, wheel[2]{};
-    float latchAngle[2]{}, latchWheel[2]{}, wheelAngle = 0;
+    float latchAngle[2]{}, latchWheel[2]{}, wheelAngle = 0, smoothedSteer = 0;
     int holder = -1;
 };
 // Cache only trusted seat-local attachment; invalid samples cannot overwrite it.

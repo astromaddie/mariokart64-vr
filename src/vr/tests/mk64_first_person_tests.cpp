@@ -1,6 +1,8 @@
 #include "mk64_interaction.h"
 #include "dk64vr_input.h"
 #include <cassert>
+#include <algorithm>
+#include <initializer_list>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -8,6 +10,7 @@ using namespace mk64vr;
 static bool near(float a,float b,float eps=.001f){return std::abs(a-b)<eps;}
 int main(){
     FirstPersonConfig c;
+    c.steeringSmoothingS=0; // edge/sign tests isolate grip geometry from the timed filter.
     HandSample h[2]; for(auto& hand:h)hand.valid=true;
     h[0].pose.p={-c.radius,c.wheel.y,c.wheel.z}; h[1].pose.p={c.radius,c.wheel.y,c.wheel.z};
     FirstPersonControls controls;
@@ -15,14 +18,14 @@ int main(){
     h[0].grip=true; auto out=controls.update(h,true,false,true,false,c);
     assert(out.steering && out.wheelHands==1 && near(out.steer,0) && out.command==0);
     h[0].pose.p={-c.radius*.7071f,c.wheel.y+c.radius*.7071f,c.wheel.z};
-    out=controls.update(h,true,false,true,false,c); assert(out.steer>.7f);
-    h[1].grip=true; out=controls.update(h,true,false,true,false,c); assert(out.wheelHands==3 && out.steer>.7f);
+    out=controls.update(h,true,false,true,false,c); assert(near(out.steer,.5f));
+    h[1].grip=true; out=controls.update(h,true,false,true,false,c); assert(out.wheelHands==3 && near(out.steer,.5f));
     h[0].grip=false; out=controls.update(h,true,false,true,false,c); assert(out.steering && out.wheelHands==2);
     h[1].grip=false; out=controls.update(h,true,false,true,false,c); assert(!out.steering);
     // Independent sign oracle: lowering a freshly latched RIGHT rim hand is right steering.
     h[1].grip=true;controls.update(h,true,false,true,false,c);
     h[1].pose.p.y=c.wheel.y-c.radius*.5f;h[1].pose.p.x=c.radius*.8660254f;
-    out=controls.update(h,true,false,true,false,c);assert(out.steer>.45f);
+    out=controls.update(h,true,false,true,false,c);assert(near(out.steer,1.f/3.f));
     out=controls.update(h,true,true,true,false,c);assert(!out.steering && !out.command);
     out=controls.update(h,true,false,true,false,c);assert(!out.steering && !out.command);
     h[1].grip=false;controls.update(h,true,false,true,false,c);
@@ -50,6 +53,58 @@ int main(){
         h[1].grip=false;out=controls.update(h,true,false,false,true,c);assert(!out.command);
         h[1].grip=true;controls.update(h,true,false,false,true,c);h[1].velocity={.1f,0,0};h[1].grip=false;
         out=controls.update(h,true,false,false,true,c);assert(out.command==2 && near(out.velocity.x,0));
+    }
+    // Exact continuous-time response at different display rates. A fresh grip
+    // starts neutral, while the visible wheel follows the full angle immediately.
+    auto response=[](float hz,float duration) {
+        FirstPersonConfig config; FirstPersonControls filter; HandSample hands[2];
+        hands[0].valid=true;hands[0].pose.p={-config.radius,config.wheel.y,config.wheel.z};
+        filter.update(hands,true,false,false,false,config,1/hz);
+        hands[0].grip=true;auto result=filter.update(hands,true,false,false,false,config,1/hz);
+        assert(result.steering && result.steer==0 && result.angle==0);
+        hands[0].pose.p={0,config.wheel.y+config.radius,config.wheel.z};
+        for(float t=0;t<duration;) {
+            const float dt=std::min(1/hz,duration-t);t+=dt;
+            result=filter.update(hands,true,false,false,false,config,dt);
+            assert(near(result.angle,config.maxTurn));
+        }
+        return result.steer;
+    };
+    for(float hz:{72.f,90.f,120.f,144.f})for(float duration:{.060f,.180f}) {
+        const float actual=response(hz,duration),expected=1-std::exp(-duration/.060f);
+        assert(near(actual,expected,.00001f));
+        std::printf("wheel response %.0fHz %.0fms: %.6f\n",hz,duration*1000,actual);
+    }
+    for(int loss=0;loss<4;loss++) {
+        FirstPersonConfig config; FirstPersonControls filter; HandSample hands[2];
+        hands[0].valid=true;hands[0].pose.p={-config.radius,config.wheel.y,config.wheel.z};
+        filter.update(hands,true,false,false,false,config,.01f);
+        hands[0].grip=true;filter.update(hands,true,false,false,false,config,.01f);
+        hands[0].pose.p={0,config.wheel.y+config.radius,config.wheel.z};
+        auto result=filter.update(hands,true,false,false,false,config,.060f);
+        assert(result.steer>.63f);
+        const float before=result.steer;
+        result=filter.update(hands,true,false,false,false,config,0);assert(result.steer==before);
+        result=filter.update(hands,true,false,false,false,config,-1);assert(result.steer==before);
+        if(loss==0)hands[0].grip=false;
+        if(loss==3){hands[0].valid=false;hands[0].grip=false;}
+        result=filter.update(hands,loss!=1,loss==2,false,false,config,5);
+        assert(!result.steering && result.steer==0 && result.angle==0);
+        // Untrusted zero squeeze cannot rearm a lost hand; held recovery stays off.
+        hands[0].valid=true;
+        if(loss!=0) {
+            hands[0].grip=true;
+            result=filter.update(hands,true,false,false,false,config,5);
+            assert(!result.steering && result.steer==0);
+            hands[0].grip=false;filter.update(hands,true,false,false,false,config,5);
+        }
+        hands[0].grip=true;
+        result=filter.update(hands,true,false,false,false,config,5);
+        assert(result.steering && result.steer==0 && result.angle==0);
+        // The adjustable zero setting restores immediate gameplay steering.
+        config.steeringSmoothingS=0;hands[0].pose.p={config.radius,config.wheel.y,config.wheel.z};
+        result=filter.update(hands,true,false,false,false,config,.001f);
+        assert(near(result.steer,1));
     }
     // Native View routing: a tap toggles only in gameplay; hold recentres without tap.
     dk64vr::InputMapper mapper; dk64vr::InputSample s; s.valid=true;
@@ -94,6 +149,7 @@ int main(){
         Pose target{{},{(hand?1.f:-1.f)*c.radius*10.f,c.wheel.y*10.f,c.wheel.z*10.f}};
         auto skin=armSkinMatrix(racer,hand,fused?0:1,31,target,.005f,rig.eye_height);
         Vec3 grip=transformPoint(pivot,skin);
+        if(!near(grip.z,target.p.z,.005f)) std::fprintf(stderr,"wheel reach racer=%d hand=%d targetZ=%.3f gripZ=%.3f\n",racer,hand,target.p.z,grip.z);
         assert(near(grip.x,target.p.x,.005f) && near(grip.y,target.p.y,.005f) && near(grip.z,target.p.z,.005f));
         Vec3 shownPalm=transformPoint(palm,skin);
         assert(near(shownPalm.z-target.p.z,rig.grip_forward*.005f,.005f));

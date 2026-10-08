@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cmath>
+#include <cstring>
 #include "../game/mk64_scene.h"
 #include "vr_game_profile.h"
 #include "vr_game_profile_ext.h"
@@ -54,6 +55,16 @@ int main() {
     assert(dk64vr_settings_get(&settings, "level_pitch") == 0);
     assert(dk64vr_settings_get(&settings, "eye_near_m") == 0.05);
     assert(dk64vr_settings_get(&settings, "world_scale") == profile->default_world_scale);
+    assert(dk64vr_settings_get(&settings,"wheel_forward_m")==.40);
+    assert(dk64vr_settings_get(&settings,"wheel_turn_degrees")==90);
+    assert(dk64vr_settings_get(&settings,"wheel_smoothing_ms")==60);
+    const char* custom="version=1\n[vr]\nport_schema=6\nwheel_forward_m=0.52\nwheel_turn_degrees=80\nwheel_smoothing_ms=500\n";
+    dk64vr_settings_parse(&settings,custom,std::strlen(custom));
+    assert(std::fabs(dk64vr_settings_get(&settings,"wheel_forward_m")-.52)<1e-6);
+    assert(dk64vr_settings_get(&settings,"wheel_turn_degrees")==80);
+    assert(dk64vr_settings_get(&settings,"wheel_smoothing_ms")==200);
+    dk64vr_settings_set(&settings,"wheel_smoothing_ms",-1);
+    assert(dk64vr_settings_get(&settings,"wheel_smoothing_ms")==0);
     dk64vr_settings_free(&settings);
     dk64vr::InputConfig config;
     config.moveFromView = false;

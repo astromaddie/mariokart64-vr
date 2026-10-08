@@ -2432,6 +2432,9 @@ private:
             && (gameState().scene == DK64VR_SCENE_GAMEPLAY || settingsPreview);
     }
     void updateFirstPerson(const InputSample& s, InputResult& r, bool live) {
+        const float wheelDt=firstPersonInputS>0 && displayS>firstPersonInputS
+            ? float(std::min(displayS-firstPersonInputS,.1)) : 0.f;
+        firstPersonInputS=displayS;
         Mk64Frame racer{}; mk64_vr_get_racer(&racer);
         const Pose seat=mk64vr::seatPose({racer.player_pos[0][0],racer.player_pos[0][1],racer.player_pos[0][2]},
             racer.racer_heading,mk64_arm_rigs[std::clamp(racer.racer_character,0,7)].eye_height*std::max(.01f,racer.racer_size)+float(setting("seat_height")),float(setting("seat_forward")));
@@ -2448,6 +2451,7 @@ private:
         config.wheel={0,-float(setting("wheel_down_m")),-float(setting("wheel_forward_m"))};
         config.radius=float(setting("wheel_radius_m")); config.rimTolerance=float(setting("wheel_grab_m"));
         config.maxTurn=float(setting("wheel_turn_degrees"))*3.141592653589793f/180.f;
+        config.steeringSmoothingS=float(setting("wheel_smoothing_ms"))*.001f;
         config.shoulderZ=float(setting("shoulder_release_m")); config.quietSpeed=float(setting("throw_quiet_mps"));
         // Explicit process-only diagnostic, bounded to one sequence in force-render standby.
         const double diagnostic=setting("diag_grip_seconds");
@@ -2477,7 +2481,7 @@ private:
         const bool active=enabled && (live || diagnosticActive);
         const bool reset=firstPersonReset || r.recentre || s.menu || s.view || r.vrMenuChord;
         const auto output=firstPersonControls.update(hands,active,reset,
-            racer.racer_item==1 || racer.racer_item==3 || racer.racer_item==5 || (diagnosticActive && setting("diag_grip_item")!=0),racer.held_item!=0,config);
+            racer.racer_item==1 || racer.racer_item==3 || racer.racer_item==5 || (diagnosticActive && setting("diag_grip_item")!=0),racer.held_item!=0,config,wheelDt);
         firstPersonReset=false;
         if(output.steering) r.stickX=output.steer;
         Mk64VRInteraction exchange{};
@@ -3895,6 +3899,7 @@ private:
     mk64vr::FirstPersonControls firstPersonControls;
     mk64vr::HeldItemAttachment firstPersonAttachment;
     int firstPersonItemType=0;
+    double firstPersonInputS=0;
     CameraSmoother seatSmoother;
     Mat4 firstPersonView, firstPersonKartCorrection;
     bool firstPersonKartAnchored=false;

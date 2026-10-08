@@ -7,8 +7,9 @@ static Vec3 add(Vec3 a, Vec3 b) { return {a.x+b.x,a.y+b.y,a.z+b.z}; }
 static Vec3 scale(Vec3 a, float s) { return {a.x*s,a.y*s,a.z*s}; }
 static float length(Vec3 a) { return float(std::hypot(double(a.x),double(a.y),double(a.z))); }
 FirstPersonOutput FirstPersonControls::update(const HandSample hands[2], bool active, bool reset,
-    bool available, bool held, const FirstPersonConfig& c) {
+    bool available, bool held, const FirstPersonConfig& c, float deltaSeconds) {
     FirstPersonOutput out;
+    const bool wasSteering=wheel[0] || wheel[1];
     int releaseHand=-1;
     if (!held && !available) holder = -1;
     for (int h=0; h<2; ++h) {
@@ -47,7 +48,16 @@ FirstPersonOutput FirstPersonControls::update(const HandSample hands[2], bool ac
     }
     if(count) wheelAngle=std::clamp(angleSum/count,-c.maxTurn,c.maxTurn);
     else wheelAngle=0;
-    out.angle=wheelAngle; out.steering=count>0; out.steer=wheelAngle/c.maxTurn; out.itemHand=releaseHand>=0?releaseHand:holder;
+    const float target=wheelAngle/c.maxTurn;
+    // Filter only gameplay input. Rendered wheel angle and tracked hands remain
+    // immediate, so filtering cannot pull their contact points apart.
+    if(!count || !wasSteering || !active || reset) smoothedSteer=0;
+    else if(c.steeringSmoothingS<=0) smoothedSteer=target;
+    else if(std::isfinite(deltaSeconds) && deltaSeconds>0) {
+        const float alpha=-std::expm1(-std::min(deltaSeconds,.1f)/c.steeringSmoothingS);
+        smoothedSteer+=(target-smoothedSteer)*alpha;
+    }
+    out.angle=wheelAngle; out.steering=count>0; out.steer=smoothedSteer; out.itemHand=releaseHand>=0?releaseHand:holder;
     return out;
 }
 void HeldItemAttachment::update(bool held, int hand, bool tracked, Vec3 position, Quat orientation) {
@@ -85,7 +95,7 @@ ArmSolution solveArm(Vec3 shoulder, Vec3 wrist, float upperLength, float lowerLe
     Vec3 axis=distance>.0001f?scale(delta,1/distance):Vec3{0,0,-1};
     // Cartoon source limbs are shorter than a seated human reach. Extend only
     // their bone axes, bounded for extreme controller poses; preserve mesh width.
-    const float extension=std::clamp(distance/std::max(.001f,upperLength+lowerLength-.001f),1.f,2.5f);
+    const float extension=std::clamp(distance/std::max(.001f,upperLength+lowerLength-.001f),1.f,2.6f);
     upperLength*=extension; lowerLength*=extension;
     const float reach=std::clamp(distance,std::abs(upperLength-lowerLength)+.001f,upperLength+lowerLength-.001f);
     out.wrist=add(shoulder,scale(axis,reach));

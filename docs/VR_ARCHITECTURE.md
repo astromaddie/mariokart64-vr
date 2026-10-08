@@ -414,7 +414,7 @@ Only local head/body geometry is hidden: its material/state commands still execu
 so the arms retain the authored colours and textures. The added wheel saves and
 restores render state. Palm contacts sit 2.5 cm behind the grasp point (1.4 cm for
 Toad), with controller/item targets and hand width unchanged. Bone-axis extension
-is bounded at 2.5 times the source length. The wheel stays 28 cm forward and 28 cm
+is bounded at 2.6 times the source length (including Toad reaching the farther wheel). The wheel defaults to 40 cm forward and 28 cm
 below the seat anchor. With the optional private kart import, only the local
 first-person kart geometry is replaced by the supplied frame, seat, pedals,
 engine and tyres. Its frame/rim textures use each character's authored colours.
@@ -428,7 +428,17 @@ both grip poses and squeezes at the predicted frame time. Seat, wheel, arms,
 held item and the corrected local kart share one basis and world-scale adapter.
 Steering latches on a fresh grip near the rim. Moving a latched hand away does not
 take an item; release and a fresh off-rim grip are required. Clockwise wheel motion
-steers right. With no wheel grips the original left stick steers.
+steers right. Full gameplay steering now requires 90 degrees (`wheel_turn_degrees`,
+previously 60), reducing steering gain by one third. `wheel_smoothing_ms` defaults
+to 60 ms, adjustable from 0 (immediate) to 200 ms through the existing settings or
+`MK64_VR_WHEEL_SMOOTHING_MS`. Only gameplay stick output receives an exponential
+filter using predicted-display time deltas; the rendered wheel and tracked hands
+stay immediate. The response reaches 63.2% after 60 ms and 95.0% after 180 ms at
+72, 90, 120 and 144 Hz. Fresh grip starts neutral; pause, focus loss, tracking loss,
+mode/recentre reset and no remaining wheel grip clear the filter. Releasing the
+wheel immediately restores the original left stick. Existing saved values remain explicit; the Frame calibration sets
+`wheel_forward_m = 0.40` and `wheel_turn_degrees = 90` in the saved profile.
+This worn-feedback calibration is source-tested; a new Frame feel check is pending.
 
 Native item hooks are `use_green_shell_item`, `use_red_shell_item` and
 `use_banana_item` in `lib/mk64/src/racing/actors_extended.c`, plus the held/launch
