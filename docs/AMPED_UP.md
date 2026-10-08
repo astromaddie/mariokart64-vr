@@ -11,12 +11,13 @@ python3 tools/amped_up/build_mod.py \
   --rom /absolute/path/to/retail-mk64.z64 \
   --patch /absolute/path/to/Amped_Up_v3.21.bps \
   --sdk-root lib/N64ModernRuntime \
-  --symbols-file MarioKart64RecompSyms/mk64.us.syms.toml
+  --symbols-file MarioKart64RecompSyms/mk64.us.syms.toml \
+  --output-nrm build/amped_up/mod/amped_up.nrm
 ```
 
 The importer checks the source ROM SHA-256 and CRC, official BPS SHA-256 and internal CRCs, and patched target SHA-256 and CRC before creating outputs. It validates the custom segment's location against the original retail heap and static-memory bounds, normalizes skeleton, animation, nested animation-data, and armature-model pointers, and preserves the eight raw three-halfword records at `0x805ADAC8` using the renderer's six-byte stride. The values' meaning has not been established; they are not physical dimensions or scale measurements.
 
-The importer also verifies the eight stock slot-0 high-detail rows at `0x805A5D88`, copies each bounded ROM package into its zero-filled fixed RAM root, and applies the stock loader's `G_DL` (`0x06`) and `G_SETTIMG` (`0xFD`) relocation rule. It traverses each package's nine display-list selectors and geometry root, model lists reached through both secondary armatures, and all 32 roots selected from the renderer's four checked static LOD/alternate-start tables at `0x805A46C0..0x805A473C`. The extracted renderer also emits seven literal geometry roots at `0x805AADC0`, `0x805AADF0`, `0x805ABB88`, `0x805ABB30`, `0x805ABB60`, `0x805A89B8`, and `0x805A8160`, plus the state-only root `0x805ADA30`. Its indexed state roots are checked at `0x805AD880 + i * 0x30` for all eight racer slots. All reachable lists from these sources are traversed; their `G_DL`, `G_VTX`, and `G_SETTIMG` pointers are converted to segment-0 tokens. This includes the native-observed Mario LOD command at `0x805C7940`, whose source vertex pointer `0x0152A3A8` is relocated to `0x005C7998`. `G_BRANCH_Z` targets are followed when a preceding `G_RDPHALF_1` supplies one. The importer requires terminated lists, in-range image references, and vertex ranges inside initialized copied bytes. ROM references may cross between imported packages when their destinations are known; unresolved addresses and malformed or unterminated lists fail the import. The current target validates 269 reachable display lists and 3,681 unique command addresses, including 340 vertex commands and 16 texture-image commands; no `G_BRANCH_Z` appears in this closure. The raw extracted segment and hydrated compiler input are written separately, with separate SHA-256 values in `import-report.json`.
+The importer also verifies the eight normal/default rows (index 2, marker 0) at `0x805A5D88 + character * 0x80 + 0x20`, copies each bounded ROM package into its zero-filled fixed RAM root, and applies the stock loader's `G_DL` (`0x06`) and `G_SETTIMG` (`0xFD`) relocation rule. It traverses each package's nine display-list selectors at a 16-byte `G_DL`/`ENDDL` stride and geometry root, model lists reached through both secondary armatures, and all 32 roots selected from the renderer's four checked static LOD/alternate-start tables at `0x805A46C0..0x805A473C`. The extracted renderer also emits seven literal geometry roots at `0x805AADC0`, `0x805AADF0`, `0x805ABB88`, `0x805ABB30`, `0x805ABB60`, `0x805A89B8`, and `0x805A8160`, plus the state-only root `0x805ADA30`. Its indexed state roots are checked at `0x805AD880 + i * 0x30` for all eight racer slots. All reachable lists from these sources are traversed; their `G_DL`, `G_VTX`, and `G_SETTIMG` pointers are converted to segment-0 tokens. This includes the normal Mario alternate-list command at `0x805C7888`, whose source vertex pointer `0x01497228` is relocated to `0x005C78F8`, and the animated limb selected at package offset `0x50`. `G_BRANCH_Z` targets are followed when a preceding `G_RDPHALF_1` supplies one. The importer requires terminated lists, in-range image references, and vertex ranges inside initialized copied bytes. ROM references may cross between imported packages when their destinations are known; unresolved addresses and malformed or unterminated lists fail the import. The current target validates 323 reachable display lists and 4,671 unique command addresses, including 461 vertex commands and 16 texture-image commands; no `G_BRANCH_Z` appears in this closure. The raw extracted segment and hydrated compiler input are written separately, with separate SHA-256 values in `import-report.json`.
 
 The segment-0 convention follows the pinned MK64 source. `lib/mk64/src/main.c` calls `set_segment_base_addr(0, (void*) SEG_START)`; `SEG_START` is `0x80000000` in `lib/mk64/include/segments.h`, and `set_segment_base_addr` masks addresses with `0x1FFFFFFF` in `lib/mk64/src/racing/memory.c`, so segment 0's physical base is zero. That same `memory.c` implementation of `segmented_to_virtual` indexes `gSegmentTable` with the full high byte. Passing original `0x80xxxxxx` KSEG pointers to stock animation code would therefore index outside the 16-entry table. The imported typed CPU pointers use 24-bit segment-0 offsets, and the bounded animation adapter preserves that encoding. Pinned RT64's `RSP::fromSegmented` uses the four-bit segment number and low 24-bit offset, so the GBI tokens address those same bytes through segment 0.
 
@@ -24,7 +25,7 @@ The importer also lowers Amped helper `0x804ADE40`'s original 960-effect cutoff 
 
 The build extracts the ten renderer and helper functions from the verified patched image, relocates their direct MIPS calls against the pinned MK64 function symbols, and invokes the pinned `RecompModTool` and `OfflineModRecomp`. The generated source has 13 unique function definitions: ten extracted functions, the `render_kart` wrapper, one animation tail-call adapter, and the segment-copy callback. The `render_kart` O32 adapter provides the renderer's fifth stack argument and saves `$ra` beyond its 16-byte argument home area; the stock animation adapter does the same and masks its two pointer arguments to segment-0 offsets. A base (`*`) `recomp_on_init` callback copies the hydrated model data segment to its original fixed address `0x80400000` before game rendering. The NRM identifies `mk64` as its target game without requiring a separate mod dependency. The stock functions called by this closure were byte-compared between retail and Amped ROMs and were unchanged. `OfflineModRecomp` output, the linked ELF/map/disassembly, raw and hydrated segments, import report, and build report are kept under ignored `build/amped_up/`.
 
-The successful package is written to `mods/amped_up.nrm`, which is ignored by Git and loaded by the project when present. Its fixed model-data range is `0x80400000..0x8072E3AF`, within expansion RAM and above the retail allocator/static image. That is a shared fixed-address reservation: other mods must not use this range at the same time. The importer cannot detect conflicts with other installed mods.
+The command above keeps the successful package under ignored `build/amped_up/mod/`. Without `--output-nrm`, the desktop default remains `mods/amped_up.nrm`, which the project loads when present. Its fixed model-data range is `0x80400000..0x8072E3AF`, within expansion RAM and above the retail allocator/static image. That is a shared fixed-address reservation: other mods must not use this range at the same time. The importer cannot detect conflicts with other installed mods.
 
 For the standalone Frame installation, put the generated NRM in `$APP_FOLDER_PATH/mods/amped_up.nrm` and enable `amped_up_3d_racers` in the frontend's mod selection. The current installation uses `~/.local/share/MK64FrameVR/mods`. Keep the private output outside the checkout's `mods` directory when building the reusable application package: CMake embeds root-level `mods/*.nrm` files. The installed Frame model mod is external to the application package.
 
@@ -37,3 +38,52 @@ The mod force-patches only `render_kart`; player-level renderer tags, shadows, s
 The project's current `render_kart` patch also applies sprite palette colors, blur, and special color effects. The force-patch bypasses that body. The Amped renderer has its own player-effect branches, but matching all stock palette, blur, Boo, and hit-effect behavior has not been confirmed by this source/build step; verify those states during native runtime testing before calling racer effects equivalent. The renderer indexes from `0x805ADAC8` by `characterId * 6` and reads three halfwords, so the importer preserves eight raw three-halfword records without assigning them physical labels.
 
 The mod replaces only the project renderer hook. It does not patch or include Amped Up's unrelated gameplay hooks or course/cup assets.
+
+## Wear-report rendering corrections
+
+The v3.21 standard set is selected from its own character-selection data. Z-button
+handling at `0x80434C70..0x80434CF8` sets a descriptor cooldown; the tick at
+`0x805A4330` advances the selected row and invokes the package loader at
+`0x805A4240`. Each `0x805A5D08 + character * 16` descriptor initializes its
+selected halfword at `+8` to **2**. Those eight rows have marker 0; the next
+Z-selected rows have marker 1 (including subvariants for Yoshi/Toad). The prior
+import chose reserved row 0 (`0xFFFE0000`), whose visible models were seasonal.
+The current import hydrates the game's normal default row 2 and does not add a
+costume-selection menu to retail MK64.
+
+The selector changes only each package's contents at the same destination. It
+does not swap the separate skeleton table at `0x805A4740` or animation table at
+`0x805A5400`. All 60 typed armature model references must be reached by the final
+validated graph. The earlier eight-byte selector walk treated alternating
+`ENDDL` records as entries and stopped before the later animated limbs; the
+correct sixteen-byte walk covers all nine selectors and rejects an unresolved
+vertex in the actual Mario `+0x50` limb at ROM `0x014996C8`. The check is against
+private production bytes, not a duplicate test model.
+
+
+The checked v3.21 code transformations select the original articulated racer plus
+character-detail helpers for every visible racer. The primary branch at
+`0x805A7490` reaches `0x805A6650` and `0x805A6D30`; the distance route at
+`0x805A7738..0x805A7740` reaches the same pair after the existing visibility
+rejection. Matrix allocation, alpha, light arguments and player/character indices
+remain on their authored paths. This bypasses the absent custom game flags and
+race-distance LOD decisions; redirecting the far table to the near table alone
+would still leave a reduced model path. Expected-word checks reject other images.
+
+The source star/lightning branch previously read zero-filled custom color rows at
+`0x804AC248`; their Amped update hooks are outside the imported renderer. Seven
+checked instruction substitutions read the live retail per-player RGB arrays at
+`0x80164B10/20/30` instead. The original light/shading construction remains, and
+retail `func_800235AC` continues to advance the palette once per game tick. The
+renderer neither starts another palette clock nor freezes a chosen star color.
+The importer tests execute the actual encoded load and selector blocks for every
+player and character, with different palette phases and preserved call arguments.
+Native multiple-frame effect images remain a separate acceptance check.
+
+The source-verified wear-fix candidate is private NRM
+`b9715d16d164aae3c948ca265563445967049de67787206a32bc84bbc9f8b980`, with hydrated
+segment `f202d50084299aaf2658edbee93f04ddba9936e92f9dac2ed27fb8fbd3cc8e78`.
+Its importer passes 14 checks and both pinned mod compilation tools produce 13
+functions. The candidate and selector/import/build provenance are under ignored
+`build-linux-vr-validation/wear-fixes/mod/`. These are source/package checks;
+native all-racer images, star phases and performance remain distinct acceptance.

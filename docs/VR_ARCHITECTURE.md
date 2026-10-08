@@ -279,3 +279,41 @@ Local submitted images, native logs, import reports and simulation comparisons a
 preserved under ignored `build-linux-vr-validation/amped/`. The normal Steam title
 `Devkit Game: MarioKart64VR` enables the model mod and runs without diagnostic autostart,
 forced rendering, capture or automatic-exit settings.
+
+## Wear-report sprite, HUD and scene checks
+
+The MK64 profile now enables cylindrical facing for its actual world-sprite tags.
+RT64 uses the smoothed head-centre world viewpoint shared by the submitted eyes,
+with world-up and each sprite's authored scale, mirror and local roll. Tagged
+production draws cover actor trees/cows/plants/shells, course props and creatures,
+kart particles, flat balloon/chain-chomp alternatives, and bomb bodies/wheels/fuses.
+Nested shadow draws use ordinary tags. Real 3D palms, animated creature alternatives
+and other solid objects retain their authored matrices. Scratch-position callers
+use stable object/bomb identities plus local slots; they do not share the scratch
+buffer's address as an interpolation identity.
+
+In immersive gameplay only, normal timer and lap-time cells use the existing
+full-opacity one-cycle timer draw. Its exclusive 8×16 rectangles cover the full
+rightmost texel; copy mode's fractional inclusive edge clipped that texel at high
+resolution. Rainbow/flashing and afterimage timers already use this complete-cell
+path. The 104×16 atlas, eight-pixel advance, alignment and native HUD motion remain.
+Flat/cinema normal timers retain the retail copy-mode draw.
+
+For bounded native QA, `MK64_DIAG_AUTOSTART=90` enables the original menu/input
+script plus optional process-only selectors: `MK64_DIAG_CHARACTER=0..7`,
+`MK64_DIAG_COURSE=<retail course id>`, and `MK64_DIAG_STAR_AT=<race second 0..60>`.
+Selection is applied before native race initialization. Only the 16 retail Grand
+Prix courses are accepted (Moo Moo Farm is 9); unsupported battle courses are
+logged and rejected. Star is used once through `apply_star_sound_effect`, after
+race start. No option is read without enabled autostart, no selection is persisted,
+and diagnostics stop after at most 120 seconds of game frames.
+
+During that bounded run, `[mk64-diag] racer` samples the actual nested display lists
+emitted by each visible racer once per second: player/character, commands,
+triangles, matrices, list count, effect bits and live RGB. A depth/command limit
+reports `truncated=1`, so an incomplete traversal cannot look like a valid primitive
+count. Compare Wario/Mario and all eight characters with the previous NRM under
+the same scene/camera, and inspect both-eye images. Capture several star phases,
+Moo Moo Farm side/pass views (with head roll), live timer and completed-lap cells.
+Keep one run with all new scene options unset for simulation parity. Host/source
+tests and these diagnostic counts do not replace native images or a worn check.

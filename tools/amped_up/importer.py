@@ -257,7 +257,7 @@ def hydrate_model_packages(
     emitted_display_list_roots: list[dict] | None = None,
     emitted_display_list_ranges: list[dict] | None = None,
 ) -> tuple[bytes, dict]:
-    """Copy the eight stock slot-0 model packages and resolve their live GBI pointers.
+    """Copy the eight checked selected model packages and resolve their live GBI pointers.
 
     The original loader copies each selected VROM range to its fixed RAM root and
     rebases G_DL/G_SETTIMG words in that range. Its G_VTX words remain untouched,
@@ -270,7 +270,11 @@ def hydrate_model_packages(
     row_stride = int(package_table["row_stride"])
     rows_per_character = int(package_table["rows_per_character"])
     expected_marker = _configured_int(package_table["expected_marker"], "model package row marker")
-    if row_stride != 16 or rows_per_character <= 0:
+    selected_slot = int(package_table.get("selected_slot", 0))
+    entry_stride = int(package_table.get("entry_stride", 16))
+    if entry_stride != 16:
+        raise ImportError("model selectors must use the traced G_DL/ENDDL 16-byte stride")
+    if row_stride != 16 or rows_per_character <= 0 or not 0 <= selected_slot < rows_per_character:
         raise ImportError("model package table must use the traced 16-byte rows and a positive character stride")
     table_offset = table_address - segment_ram_start
     if table_offset < 0 or table_offset + max(p["row_index"] for p in package_configs) * row_stride + 16 > len(raw_segment):
@@ -293,8 +297,8 @@ def hydrate_model_packages(
 
         if not name or name in seen_names:
             raise ImportError(f"model package names must be unique and nonempty: {name!r}")
-        if row_index in seen_rows or row_index < 0 or row_index % rows_per_character:
-            raise ImportError(f"model package {name} has an invalid or duplicate slot-0 row index {row_index}")
+        if row_index in seen_rows or row_index < 0 or row_index % rows_per_character != selected_slot:
+            raise ImportError(f"model package {name} has an invalid or duplicate selected row index {row_index}")
         if ram_start % 8 or rom_start % 8 or rom_end % 8 or rom_end <= rom_start:
             raise ImportError(f"model package {name} has an invalid or unaligned source or destination range")
         package_size = rom_end - rom_start
@@ -302,16 +306,16 @@ def hydrate_model_packages(
             raise ImportError(f"model package {name} extends beyond the patched ROM")
         if ram_start < segment_ram_start or ram_start + package_size > segment_ram_start + len(raw_segment):
             raise ImportError(f"model package {name} destination is outside the copied custom segment")
-        if entry_count <= 0 or entry_count * 8 > package_size:
+        if entry_count <= 0 or entry_count * entry_stride > package_size:
             raise ImportError(f"model package {name} has an invalid display-list entry table")
-        if geometry_root_offset % 8 or geometry_root_offset < entry_count * 8 or geometry_root_offset + 8 > package_size:
+        if geometry_root_offset % 8 or geometry_root_offset < entry_count * entry_stride or geometry_root_offset + 8 > package_size:
             raise ImportError(f"model package {name} has an invalid geometry-root offset")
 
         row_offset = table_offset + row_index * row_stride
         row_marker, row_ram, row_rom_start, row_rom_end = struct.unpack_from(">4I", raw_segment, row_offset)
         if (row_marker, row_ram, row_rom_start, row_rom_end) != (expected_marker, ram_start, rom_start, rom_end):
             raise ImportError(
-                f"model package {name} does not match its stock slot-0 row at index {row_index}: "
+                f"model package {name} does not match its stock selected row at index {row_index}: "
                 f"{row_marker:08X}/{row_ram:08X}/{row_rom_start:08X}/{row_rom_end:08X}"
             )
 
@@ -343,9 +347,9 @@ def hydrate_model_packages(
             previous_end = previous[end_key] if label == "VROM" else previous["ram_start"] + previous["size"]
             if current[start_key] < previous_end:
                 raise ImportError(f"model package {previous['name']} overlaps {current['name']} in {label}")
-    expected_rows = list(range(0, len(package_configs) * rows_per_character, rows_per_character))
+    expected_rows = list(range(selected_slot, len(package_configs) * rows_per_character, rows_per_character))
     if sorted(seen_rows) != expected_rows:
-        raise ImportError(f"model packages must cover all eight slot-0 rows in order: {expected_rows}")
+        raise ImportError(f"model packages must cover all eight selected rows in order: {expected_rows}")
 
     hydrated = bytearray(raw_segment)
     stock_relocations = {"g_dl": 0, "g_settimg": 0}
@@ -644,7 +648,7 @@ def hydrate_model_packages(
     package_reports = []
     all_texture_pointers: set[str] = set()
     for package in packages:
-        roots = [package["ram_start"] + index * 8 for index in range(package["entry_count"])]
+        roots = [package["ram_start"] + index * entry_stride for index in range(package["entry_count"])]
         geometry_root = package["ram_start"] + package["geometry_root_offset"]
         metrics = inspect_graph(roots + [geometry_root], package["name"])
         if metrics["g_vtx"] == 0:
@@ -815,6 +819,10 @@ def hydrate_model_packages(
         "reachable_g_vtx": metrics["g_vtx"],
         "reachable_g_settimg": metrics["g_settimg"],
     })
+
+    missing_armature_roots = sorted({root["address"] for root in model_display_list_roots} - unique_display_lists)
+    if missing_armature_roots:
+        raise ImportError("untraversed animated-model roots: " + ", ".join(f"0x{x:08X}" for x in missing_armature_roots))
 
     return bytes(hydrated), {
         "packages": package_reports,

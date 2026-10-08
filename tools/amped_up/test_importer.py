@@ -59,25 +59,25 @@ class AmpedImporterTests(unittest.TestCase):
             hydration = report["model_package_hydration"]
             packages = hydration["packages"]
             self.assertEqual(len(packages), 8)
-            self.assertEqual([package["row_index"] for package in packages], list(range(0, 64, 8)))
-            self.assertTrue(all(package["row_marker"] == "0xFFFE0000" for package in packages))
+            self.assertEqual([package["row_index"] for package in packages], list(range(2, 64, 8)))
+            self.assertTrue(all(package["row_marker"] == "0x00000000" for package in packages))
             self.assertTrue(all(package["display_list_entries"] == 9 for package in packages))
             self.assertTrue(all(package["nonempty_display_list_entries"] > 0 for package in packages))
             self.assertTrue(all(package["reachable_g_vtx"] > 0 for package in packages))
             self.assertTrue(all(package["g_vtx_local_relocations"] > 0 for package in packages))
             self.assertGreater(hydration["stock_relocations"]["g_dl"], 0)
-            self.assertGreater(hydration["stock_relocations"]["g_settimg"], 0)
-            self.assertEqual(hydration["reachable_graph"]["display_lists"], 269)
-            self.assertEqual(hydration["reachable_graph"]["unique_command_addresses"], 3681)
-            self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_commands"], 340)
-            self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_local_relocations"], 211)
-            self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_fixed_segment_references"], 129)
+            self.assertEqual(hydration["stock_relocations"]["g_settimg"], 0)  # normal skins use shared segment textures
+            self.assertEqual(hydration["reachable_graph"]["display_lists"], 323)
+            self.assertEqual(hydration["reachable_graph"]["unique_command_addresses"], 4671)
+            self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_commands"], 461)
+            self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_local_relocations"], 314)
+            self.assertEqual(hydration["reachable_graph"]["unique_g_vtx_fixed_segment_references"], 147)
             self.assertEqual(hydration["reachable_graph"]["unique_g_settimg_commands"], 16)
             self.assertEqual(
                 hydration["reachable_graph"]["g_settimg_pointers"],
                 ["0x5B05E8", "0x5B0600", "0x5B3870", "0x5B3888", "0x5B6CF8", "0x5B6D18",
-                 "0x5B9490", "0x5B94B0", "0x5E5970", "0x5E5990", "0x5EC3E0", "0x5EC400",
-                 "0x5F2FF0", "0x5F3010", "0x5FB600", "0x5FB620"],
+                 "0x5B9490", "0x5B94B0", "0x5BC878", "0x5BC898", "0x5BFCF8", "0x5BFD18",
+                 "0x5C3178", "0x5C3198", "0x5C65F0", "0x5C6610"],
             )
             self.assertEqual(hydration["reachable_graph"]["unique_g_branch_z_commands"], 0)
             self.assertEqual(hydration["external_armature_graph"]["display_lists"], 11)
@@ -94,10 +94,10 @@ class AmpedImporterTests(unittest.TestCase):
                     {"name": "secondary_mario_armature_alt.limb_5,secondary_mario_armature_alt.limb_8", "address": "0x5AA9F0"},
                 ],
             )
-            self.assertEqual(len(hydration["code_patches"]), 5)
+            self.assertEqual(len(hydration["code_patches"]), 15)
             self.assertEqual(
                 hydration["gbi_address_normalizations"],
-                {"g_dl": 191, "g_vtx": 340, "g_settimg": 16, "g_branch_z": 0},
+                {"g_dl": 293, "g_vtx": 461, "g_settimg": 16, "g_branch_z": 0},
             )
             static_tables = hydration["static_display_list_tables"]
             self.assertEqual(
@@ -138,23 +138,22 @@ class AmpedImporterTests(unittest.TestCase):
             root = 0x805C6E10
             root_offset = root - segment_base
             root_w0, root_w1 = struct.unpack_from(">II", hydrated_segment, root_offset)
-            self.assertEqual((root_w0, root_w1), (0x06000000, 0x005CB358))
-            vertex_command = 0x805CB380 - segment_base
+            self.assertEqual((root_w0, root_w1), (0x06000000, 0x005CAB50))
+            vertex_command = 0x805CAB78 - segment_base
             vertex_w0, vertex_w1 = struct.unpack_from(">II", hydrated_segment, vertex_command)
-            self.assertEqual((vertex_w0, vertex_w1), (0x040081FF, 0x005CB4E8))
+            self.assertEqual((vertex_w0, vertex_w1), (0x040081FF, 0x005CAC98))
             self.assertEqual(raw_segment[root_offset : root_offset + 8], bytes(8))
 
-            # Native frame-811 RSP evidence showed the renderer selecting the
-            # Mario LOD table's 0x805ADE80 root and loading a vertex command the
-            # eight DMA-entry/armature roots had missed. Resolve that command
-            # from the official patched source package into its copied RAM.
+            # Retain the previous LOD-path regression with the corresponding
+            # command in the normal package: its alternate +0x70 selector
+            # reaches this ROM vertex operand, which must resolve into copied RAM.
             lod_table = 0x805A46E0 - segment_base
             self.assertEqual(struct.unpack_from(">I", hydrated_segment, lod_table)[0], 0x805ADE80)
-            source_lod_vertex = struct.unpack_from(">II", result.target, 0x152A350)
-            self.assertEqual(source_lod_vertex, (0x04005D6F, 0x0152A3A8))
-            lod_vertex = 0x805C7940 - segment_base
+            source_lod_vertex = struct.unpack_from(">II", result.target, 0x14971B8)
+            self.assertEqual(source_lod_vertex, (0x040079DF, 0x01497228))
+            lod_vertex = 0x805C7888 - segment_base
             lod_vertex_w0, lod_vertex_w1 = struct.unpack_from(">II", hydrated_segment, lod_vertex)
-            self.assertEqual((lod_vertex_w0, lod_vertex_w1), (0x04005D6F, 0x005C7998))
+            self.assertEqual((lod_vertex_w0, lod_vertex_w1), (0x040079DF, 0x005C78F8))
 
             effect_limit = 0x804ADE54 - segment_base
             self.assertEqual(struct.unpack_from(">I", hydrated_segment, effect_limit)[0], 0x28660294)
@@ -184,6 +183,61 @@ class AmpedImporterTests(unittest.TestCase):
             self.assertEqual(struct.unpack_from(">I", hydrated_segment, animation_angle_array)[0], 0x005A6200)
             self.assertEqual(struct.unpack_from(">I", hydrated_segment, animation_cycle_array)[0], 0x005A6188)
             self.assertEqual(struct.unpack_from(">I", hydrated_segment, 0x805AA700 + 12 - segment_base)[0], 0x005AA748)
+
+    def test_live_effect_rgb_addresses_for_all_players(self) -> None:
+        """Execute the actual imported MIPS load block, including the old black path."""
+        config = load_config(DEFAULT_CONFIG)
+        _, _, result = read_expected_inputs(self.source_path, self.patch_path, config)
+        base = int(config["segment"]["ram_start"], 16)
+        start = int(config["segment"]["rom_start"], 16)
+        raw = result.target[start:start + int(config["segment"]["length"], 16)]
+        changed = bytearray(raw)
+        for patch in config["code_patches"]:
+            struct.pack_into(">I", changed, int(patch["address"], 16) - base,
+                             int(patch["replacement_word"], 16))
+        self.assertEqual(raw[0x804AC248-base:0x804AC25A-base], bytes(18))
+
+        def run(segment, player, effect_row, rgb):
+            registers = [0] * 32
+            registers[2], registers[18] = effect_row, player
+            reads = []
+            for pc in range(0x805A7848, 0x805A7874, 4):
+                word = struct.unpack_from(">I", segment, pc-base)[0]
+                op, rs, rt, rd = word >> 26, (word >> 21) & 31, (word >> 16) & 31, (word >> 11) & 31
+                imm = (word & 0xffff) - (0x10000 if word & 0x8000 else 0)
+                if op == 0 and word & 63 == 0:
+                    registers[rd] = registers[rt] << ((word >> 6) & 31)
+                elif op == 0 and word & 63 == 0x21:
+                    registers[rd] = registers[rs] + registers[rt]
+                elif op == 0 and word & 63 == 0x2b:
+                    registers[rd] = int(registers[rs] < registers[rt])
+                elif op == 9:
+                    registers[rt] = registers[rs] + imm
+                elif op == 15:
+                    registers[rt] = (word & 0xffff) << 16
+                elif op == 0x21:
+                    address = registers[rs] + imm
+                    reads.append(address)
+                    registers[rt] = rgb.get(address, struct.unpack_from(">h", segment, address-base)[0]
+                                                if base <= address < base+len(segment) else -1)
+                else:
+                    self.fail(f"unexpected effect-load instruction {word:08X}")
+                registers[0] = 0
+            return tuple(registers[i] for i in (3, 4, 5)), reads
+
+        for phase in range(4):
+            # Distinct live values make a wrong player, channel, or stale custom
+            # table address observable. These are inputs, not a copied algorithm.
+            palette = {0x80164B10 + channel*16 + player*2: 17+phase*29+channel*3+player
+                       for channel in range(3) for player in range(8)}
+            for player in range(8):
+                for effect in (0, 0x200):
+                    old, _ = run(raw, player, effect, palette)
+                    self.assertEqual(old, (0, 0, 0))
+                    actual, addresses = run(changed, player, effect, palette)
+                    expected = [0x80164B10 + player*2 + channel*16 for channel in range(3)]
+                    self.assertEqual(addresses, expected)
+                    self.assertEqual(actual, tuple(palette[address] for address in expected))
 
     def test_rejects_wrong_retail_input_before_writing_outputs(self) -> None:
         config = load_config(DEFAULT_CONFIG)
@@ -234,13 +288,47 @@ class AmpedImporterTests(unittest.TestCase):
                 emitted_display_list_ranges=config["model_emitted_display_list_ranges"],
             )
 
+    def test_default_skin_descriptor_matches_selected_packages(self) -> None:
+        config = load_config(DEFAULT_CONFIG)
+        _, _, result = read_expected_inputs(self.source_path, self.patch_path, config)
+        def words(ram, fmt):
+            return struct.unpack_from(fmt, result.target, ram - 0x80400000 + 0xE00000)
+        self.assertEqual(config["model_package_table"]["selected_slot"], 2)
+        self.assertEqual(config["model_package_table"]["entry_stride"], 16)
+        for character, package in enumerate(config["model_packages"]):
+            descriptor = 0x805A5D08 + character * 16
+            self.assertEqual(words(descriptor, ">I")[0], 0x805A5D88 + character * 128)
+            self.assertEqual(words(descriptor + 8, ">H")[0], 2)
+            self.assertEqual(package["row_index"], character * 8 + 2)
+            start = int(package["rom_start"], 16)
+            for selector in range(9):
+                op, address, end, unused = struct.unpack_from(">4I", result.target, start + selector * 16)
+                self.assertIn(op, (0x06000000, 0xB8000000))
+                self.assertEqual((end, unused), (0xB8000000, 0))
+
+    def test_rejects_unresolved_animated_limb_beyond_first_five_selectors(self) -> None:
+        config = load_config(DEFAULT_CONFIG)
+        _, _, result = read_expected_inputs(self.source_path, self.patch_path, config)
+        rom, ram, length = validate_segment_layout(config["segment"], config["retail_memory"], len(result.target))
+        bad = bytearray(result.target)
+        # Mario's +0x50 selector reaches this actual limb vertex command. The
+        # former eight-byte stride stopped at +0x40 and missed this entire limb.
+        self.assertEqual(struct.unpack_from(">II", bad, 0x14996C8), (0x0400617F, 0x01499760))
+        struct.pack_into(">I", bad, 0x14996C8 + 4, 0x01700000)
+        with self.assertRaisesRegex(ImportError, "mario G_VTX.*0x01700000"):
+            hydrate_model_packages(bytes(bad), bytes(bad[rom:rom+length]), ram,
+                config["model_package_table"], config["model_packages"],
+                config["cpu_pointer_tables"], config["cpu_pointer_roots"], config["code_patches"],
+                config["model_static_display_list_tables"], config["model_emitted_display_list_roots"],
+                config["model_emitted_display_list_ranges"])
+
     def test_rejects_reachable_unresolved_package_vertex_reference(self) -> None:
         config = load_config(DEFAULT_CONFIG)
         _, _, result = read_expected_inputs(self.source_path, self.patch_path, config)
         rom_start, ram_start, length = validate_segment_layout(config["segment"], config["retail_memory"], len(result.target))
         raw_segment = result.target[rom_start : rom_start + length]
         corrupted_target = bytearray(result.target)
-        struct.pack_into(">I", corrupted_target, 0x152DD90 + 4, 0x01700000)
+        struct.pack_into(">I", corrupted_target, 0x149A4A8 + 4, 0x01700000)
         with self.assertRaisesRegex(ImportError, "not a segment-0/KSEG0 pointer: 0x01700000"):
             hydrate_model_packages(
                 bytes(corrupted_target),
@@ -259,11 +347,12 @@ class AmpedImporterTests(unittest.TestCase):
         rom_start, ram_start, length = validate_segment_layout(config["segment"], config["retail_memory"], len(result.target))
         raw_segment = result.target[rom_start : rom_start + length]
         corrupted_target = bytearray(result.target)
-        # This G_VTX at the known Mario near-LOD root is outside the previously
-        # covered entry/armature roots; forcing an unresolved operand must now
+        # This G_VTX at the fixed Mario near-LOD root is outside the
+        # package-entry/armature roots; forcing an unresolved operand must now
         # fail while the production graph walks the checked static table.
-        struct.pack_into(">I", corrupted_target, 0x152A350 + 4, 0x01700000)
-        with self.assertRaisesRegex(ImportError, "package_alternate_start_b G_VTX at 0x805C7940.*0x01700000"):
+        struct.pack_into(">I", corrupted_target, 0xFADEA0 + 4, 0x01700000)
+        raw_segment = bytes(corrupted_target[rom_start : rom_start + length])
+        with self.assertRaisesRegex(ImportError, "character_lod_near G_VTX at 0x805ADEA0.*0x01700000"):
             hydrate_model_packages(
                 bytes(corrupted_target),
                 raw_segment,
@@ -330,6 +419,70 @@ class AmpedImporterTests(unittest.TestCase):
                 config["model_emitted_display_list_ranges"],
             )
 
+    def test_articulated_renderer_preserves_all_player_arguments(self) -> None:
+        config = load_config(DEFAULT_CONFIG)
+        _, _, result = read_expected_inputs(self.source_path, self.patch_path, config)
+        base = int(config["segment"]["ram_start"], 16)
+        rom = int(config["segment"]["rom_start"], 16)
+        data = bytearray(result.target[rom:rom + int(config["segment"]["length"], 16)])
+        for patch in config["code_patches"]:
+            offset = int(patch["address"], 16) - base
+            self.assertEqual(struct.unpack_from(">I", data, offset)[0], int(patch["expected_word"], 16))
+            struct.pack_into(">I", data, offset, int(patch["replacement_word"], 16))
+        def word(pc):
+            return struct.unpack_from(">I", data, pc - base)[0]
+        # The remote path must retain the original visibility rejection before
+        # the new selector; alpha remains restored by the branch delay slot.
+        self.assertEqual(word(0x805A7730), 0x4501FF90)
+        self.assertEqual(word(0x805A7740), 0x8FA80078)
+        for start in (0x805A7490, 0x805A7738):
+            for player in range(8):
+                for character in range(8):
+                    regs = [0] * 32
+                    regs[29] = 0x80300000
+                    regs[2] = 0x80410000
+                    regs[18], regs[19], regs[22], regs[17] = player, character, 0x800F6990 + player * 0xDD8, 0
+                    regs[7] = 137
+                    stack = {0x68: 31, 0x64: 47, 0x60: 59, 0x74: 71, 0x70: 83, 0x6C: 97,
+                             0x78: 137, 0xB4: 3}
+                    calls, pc = [], start
+                    def step(ins):
+                        op, rs, rt = ins >> 26, (ins >> 21) & 31, (ins >> 16) & 31
+                        imm = (ins & 0xFFFF) - (0x10000 if ins & 0x8000 else 0)
+                        if op == 32:
+                            offset = regs[rs] + imm - base
+                            regs[rt] = struct.unpack_from("b", data, offset)[0]
+                        elif op == 35 and rs == 29: regs[rt] = stack[imm]
+                        elif op == 43 and rs == 29: stack[imm] = regs[rt]
+                        elif op == 9: regs[rt] = regs[rs] + imm
+                        elif op == 15: regs[rt] = (ins & 0xFFFF) << 16
+                        elif op == 0 and ins & 63 in (0x21, 0x25):
+                            regs[(ins >> 11) & 31] = regs[rs] + regs[rt] if ins & 63 == 0x21 else regs[rs] | regs[rt]
+                        elif ins: self.fail(f"unhandled setup instruction {ins:08X}")
+                        regs[0] = 0
+                    for _ in range(100):
+                        ins = word(pc)
+                        if ins >> 26 == 4:  # checked unconditional BEQ zero,zero
+                            self.assertEqual(ins & 0xFFFF0000, 0x10000000)
+                            step(word(pc + 4))
+                            offset = (ins & 0xFFFF) - (0x10000 if ins & 0x8000 else 0)
+                            pc += 4 + offset * 4
+                        elif ins >> 26 == 3:
+                            step(word(pc + 4))
+                            target = 0x80000000 | ((ins & 0x3FFFFFF) << 2)
+                            calls.append(target)
+                            self.assertEqual(regs[4:8], [0x800F6990 + player * 0xDD8, player, 0, 3])
+                            self.assertEqual(stack[0x10], character)
+                            if len(calls) == 1:
+                                self.assertEqual([stack[n] for n in (0x20,0x24,0x28,0x2C,0x30,0x34,0x38)],
+                                                 [97,83,71,59,47,31,137])
+                            pc += 8
+                            if len(calls) == 2: break
+                        else:
+                            step(ins)
+                            pc += 4
+                    self.assertEqual(calls, [0x805A6650, 0x805A6D30])
+
     def test_generated_entrypoints_obey_o32_and_use_base_callback(self) -> None:
         build_root = DEFAULT_CONFIG.parents[2] / "build" / "amped_up"
         build_root.mkdir(parents=True, exist_ok=True)
@@ -347,7 +500,7 @@ class AmpedImporterTests(unittest.TestCase):
         self.assertEqual(generated["function_count"], 13)
         self.assertEqual(generated["extracted_function_count"], 10)
         self.assertEqual(len(generated["function_definitions"]), len(set(generated["function_definitions"])))
-        self.assertEqual(len(generated["code_patches"]), 5)
+        self.assertEqual(len(generated["code_patches"]), 15)
 
         render_entry = assembly.split("render_kart:\n", 1)[1].split(".size render_kart", 1)[0]
         self.assertIn("addiu $sp, $sp, -32", render_entry)

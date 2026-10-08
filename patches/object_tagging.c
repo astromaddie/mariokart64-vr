@@ -1,6 +1,9 @@
 #include "patches.h"
 #include "vr_render.h"
 
+extern int mk64_diag_racers_enabled;
+void mk64_diag_racer(Player* player, int playerId, Gfx* begin, Gfx* end);
+
 #if 1 // GLOBAL
 typedef enum ObjectList {
     /* 10 */ OBJECT_10 = 10,
@@ -126,7 +129,10 @@ RECOMP_PATCH void render_player(Player* player, s8 playerId, s8 screenId) {
                 G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_INTERPOLATE,
                 G_EX_ORDER_AUTO, G_EX_EDIT_ALLOW, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         }
+        Gfx* racer_start = gDisplayListHead;
         render_kart(player, playerId, screenId, var_v1);
+        if (mk64_diag_racers_enabled && screenId == 0)
+            mk64_diag_racer(player, playerId, racer_start, gDisplayListHead);
 
         // @recomp Pop the transform id.
         gEXPopMatrixGroup(gDisplayListHead++, G_MTX_MODELVIEW);
@@ -276,7 +282,7 @@ RECOMP_PATCH void func_80054BE8(s32 cameraId) {
         temp_a0 = gObjectParticle3[i];
         if ((temp_a0 != -1) && (gObjectList[temp_a0].state >= 2)) {
             // @recomp Tag the transform.
-            gEXMatrixGroupDecomposedNormal(gDisplayListHead++, (u32) &gObjectList[temp_a0] << 16 | i, G_EX_PUSH,
+            gEXMatrixGroupDecomposedNormal(gDisplayListHead++, TAG_WORLD_SPRITE(&gObjectList[temp_a0]), G_EX_PUSH,
                                            G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
 
             func_80054AFC(temp_a0, camera->pos);
@@ -354,7 +360,7 @@ RECOMP_PATCH void func_800691B8(Player* player, s8 arg1, s16 arg2, s8 arg3) {
         sp54[2] = player->unk_258[30 + arg2].unk_03A;
 
         // @recomp Tag the transform.
-        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_OBJECT(arg2) | OBJECT_10 << 16, G_EX_PUSH, G_MTX_MODELVIEW,
+        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_WORLD_SPRITE(&player->unk_258[30 + arg2]), G_EX_PUSH, G_MTX_MODELVIEW,
                                  G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO,
                                  G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_SKIP,
                                  G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_AUTO, G_EX_EDIT_ALLOW, G_EX_COMPONENT_SKIP,
@@ -394,7 +400,7 @@ RECOMP_PATCH void func_800696CC(Player* player, UNUSED s8 arg1, s16 arg2, s8 arg
         sp54[2] = 0;
 
         // @recomp Tag the transform.
-        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_OBJECT(arg2) | OBJECT_11 << 16, G_EX_PUSH, G_MTX_MODELVIEW,
+        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_WORLD_SPRITE(&player->unk_258[30 + arg2]), G_EX_PUSH, G_MTX_MODELVIEW,
                                  G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO,
                                  G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_SKIP,
                                  G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_AUTO, G_EX_EDIT_ALLOW, G_EX_COMPONENT_SKIP,
@@ -434,7 +440,7 @@ RECOMP_PATCH void func_80069938(Player* player, UNUSED s8 arg1, s16 arg2, s8 arg
         sp54[2] = player->unk_258[30 + arg2].unk_038;
 
         // @recomp Tag the transform.
-        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_OBJECT(arg2) | OBJECT_12 << 16, G_EX_PUSH, G_MTX_MODELVIEW,
+        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_WORLD_SPRITE(&player->unk_258[30 + arg2]), G_EX_PUSH, G_MTX_MODELVIEW,
                                  G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO,
                                  G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_SKIP,
                                  G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_AUTO, G_EX_EDIT_ALLOW, G_EX_COMPONENT_SKIP,
@@ -496,7 +502,7 @@ RECOMP_PATCH void func_80065AB0(Player* player, UNUSED s8 arg1, s16 arg2, s8 arg
         spAC[2] = 0;
 
         // @recomp Tag the transform.
-        gEXMatrixGroupDecomposed(gDisplayListHead++, player->type << 8 | arg2 | var_s0 << 16, G_EX_PUSH,
+        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_WORLD_SPRITE(&player->unk_258[10 + arg2]), G_EX_PUSH,
                                  G_MTX_MODELVIEW, G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO,
                                  G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_SKIP,
                                  G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_AUTO, G_EX_EDIT_ALLOW, G_EX_COMPONENT_SKIP,
@@ -1512,6 +1518,7 @@ RECOMP_PATCH void render_course_actors(struct UnkStruct_800DC5EC* arg0) {
     s32 i;
 
     struct Actor* actor;
+    u32 actorTag;
     UNUSED Vec3f sp4C = { 0.0f, 5.0f, 10.0f };
     f32 sp48 = sins(camera->rot[1] - 0x8000); // unk26;
     f32 temp_f0 = coss(camera->rot[1] - 0x8000);
@@ -1549,11 +1556,35 @@ RECOMP_PATCH void render_course_actors(struct UnkStruct_800DC5EC* arg0) {
             continue;
         }
 
+        actorTag = TAG_OBJECT((u32) actor << 16) | 0x01000000 | camera->playerId;
+        switch (actor->type) {
+            case ACTOR_TREE_MARIO_RACEWAY:
+            case ACTOR_TREE_YOSHI_VALLEY:
+            case ACTOR_TREE_ROYAL_RACEWAY:
+            case ACTOR_TREE_MOO_MOO_FARM:
+            case ACTOR_UNKNOWN_0x1A:
+            case ACTOR_TREE_BOWSERS_CASTLE:
+            case ACTOR_BUSH_BOWSERS_CASTLE:
+            case ACTOR_TREE_FRAPPE_SNOWLAND:
+            case ACTOR_CACTUS1_KALAMARI_DESERT:
+            case ACTOR_CACTUS2_KALAMARI_DESERT:
+            case ACTOR_CACTUS3_KALAMARI_DESERT:
+            case ACTOR_KIWANO_FRUIT:
+            case ACTOR_GREEN_SHELL:
+            case ACTOR_RED_SHELL:
+            case ACTOR_BLUE_SPINY_SHELL:
+            case ACTOR_PIRANHA_PLANT:
+            case ACTOR_COW:
+            case ACTOR_UNKNOWN_0x14:
+                actorTag = TAG_WORLD_ACTOR((i << 2) | camera->playerId);
+                break;
+        }
+
         if ((gCamera1Skipped && (camera->playerId == 0)) || (gCamera2Skipped && (camera->playerId == 1)) ||
             (gCamera3Skipped && (camera->playerId == 2)) || (gCamera4Skipped && (camera->playerId == 3))) {
             // Skip
             // @recomp Tag the transform
-            gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_OBJECT((u32) actor << 16) | 0x01000000 | camera->playerId,
+            gEXMatrixGroupDecomposed(gDisplayListHead++, actorTag,
                                      G_EX_PUSH, G_MTX_MODELVIEW, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP,
                                      G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP,
                                      G_EX_COMPONENT_SKIP, G_EX_ORDER_AUTO, G_EX_EDIT_ALLOW, G_EX_COMPONENT_SKIP,
@@ -1578,7 +1609,7 @@ RECOMP_PATCH void render_course_actors(struct UnkStruct_800DC5EC* arg0) {
         } else {
             // @recomp Tag the transform.
             gEXMatrixGroupDecomposedNormal(gDisplayListHead++,
-                                           TAG_OBJECT((u32) actor << 16) | 0x01000000 | camera->playerId, G_EX_PUSH,
+                                           actorTag, G_EX_PUSH,
                                            G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
         }
 
@@ -1619,7 +1650,7 @@ RECOMP_PATCH void render_course_actors(struct UnkStruct_800DC5EC* arg0) {
             case ACTOR_FALLING_ROCK:
                 // @recomp Tag the transform
                 gEXMatrixGroupDecomposed(gDisplayListHead++,
-                                         TAG_OBJECT((u32) actor << 16) | 0x01000000 | camera->playerId, G_EX_PUSH,
+                                         actorTag, G_EX_PUSH,
                                          G_MTX_MODELVIEW, G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO,
                                          G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_SKIP,
                                          G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_AUTO, G_EX_EDIT_ALLOW,
@@ -1702,14 +1733,14 @@ RECOMP_PATCH void render_course_actors(struct UnkStruct_800DC5EC* arg0) {
         (gCamera3Skipped && (camera->playerId == 3)) || (gCamera4Skipped && (camera->playerId == 4))) {
         // Skip
         // @recomp Tag the transform
-        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_OBJECT((u32) actor << 16) | 0x01000000 | camera->playerId, G_EX_PUSH,
+        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_OBJECT_BY_CAM_ID(camera->playerId), G_EX_PUSH,
                                  G_MTX_MODELVIEW, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP,
                                  G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP,
                                  G_EX_ORDER_AUTO, G_EX_EDIT_ALLOW, G_EX_COMPONENT_SKIP, G_EX_COMPONENT_SKIP);
         // recomp_printf("render_course_actors: Camera %d skipped \n", camera->playerId);
     } else {
         // @recomp Tag the transform
-        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_OBJECT((u32) actor << 16) | 0x01000000 | camera->playerId, G_EX_PUSH,
+        gEXMatrixGroupDecomposed(gDisplayListHead++, TAG_OBJECT_BY_CAM_ID(camera->playerId), G_EX_PUSH,
                                  G_MTX_MODELVIEW, G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO, G_EX_COMPONENT_AUTO,
                                  G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_INTERPOLATE, G_EX_COMPONENT_SKIP,
                                  G_EX_COMPONENT_INTERPOLATE, G_EX_ORDER_AUTO, G_EX_EDIT_ALLOW, G_EX_COMPONENT_SKIP,
@@ -2194,7 +2225,7 @@ RECOMP_PATCH void func_80054F04(s32 cameraId) {
         objectIndex = gObjectParticle2[i];
         object = &gObjectList[objectIndex];
         // @recomp Tag the transform.
-        gEXMatrixGroupDecomposedNormal(gDisplayListHead++, TAG_OBJECT(object) | cameraId | (i & 0xFF) << 8, G_EX_PUSH,
+        gEXMatrixGroupDecomposedNormal(gDisplayListHead++, TAG_WORLD_SPRITE(object) | cameraId | (i & 0xFF) << 8, G_EX_PUSH,
                                        G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
         if (object->state > 0) {
             func_8008A364(objectIndex, cameraId, 0x2AABU, 0x000000C8);
@@ -2316,9 +2347,10 @@ RECOMP_PATCH void render_object_snowmans_list_2(s32 cameraId) {
                           (u8*) 0x06006f20 /* d_course_frappe_snowland_snow */, 32, 32);
     for (i = 0; i < gObjectParticle2_SIZE; i++) {
         objectIndex = gObjectParticle2[i];
+        if (objectIndex == NULL_OBJECT_ID) continue;
 
         // @recomp Tag the transform.
-        gEXMatrixGroupDecomposedNormal(gDisplayListHead++, TAG_OBJECT(gObjectParticle2[i]) | cameraId, G_EX_PUSH,
+        gEXMatrixGroupDecomposedNormal(gDisplayListHead++, TAG_WORLD_SPRITE(&gObjectList[objectIndex]) | cameraId, G_EX_PUSH,
                                        G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
 
         if (objectIndex != NULL_OBJECT_ID) {
@@ -2618,7 +2650,7 @@ RECOMP_PATCH void render_object_bowser_flame_particle(s32 objectIndex, s32 camer
 }
 #endif
 
-#if 0
+#if 1
 RECOMP_PATCH void render_cows(Camera* camera, Mat4 arg1, UNUSED struct Actor* actor) {
     u16 temp_s1;
     f32 temp_f0;
@@ -2653,7 +2685,7 @@ RECOMP_PATCH void render_cows(Camera* camera, Mat4 arg1, UNUSED struct Actor* ac
             arg1[3][2] = sp88[2];
             if ((gMatrixObjectCount < MTX_OBJECT_POOL_SIZE)) {
                 // @recomp Tag the transform.
-                gEXMatrixGroupDecomposedNormal(gDisplayListHead++, TAG_OBJECT((u32) actor << 16) | var_s1->someId,
+                gEXMatrixGroupDecomposedNormal(gDisplayListHead++, TAG_WORLD_ACTOR(0x10000u | ((var_s1 - var_t1) << 2) | camera->playerId),
                                                G_EX_PUSH, G_MTX_MODELVIEW, G_EX_EDIT_ALLOW);
 
                 if (render_set_position(arg1, 0) != 0) {

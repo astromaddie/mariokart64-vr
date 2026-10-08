@@ -33,86 +33,90 @@ entries = 8
 stride = 6
 fields = 3
 
-# The stock loader's slot-0 (marker 0xFFFE0000) high-detail package for each
-# racer. It DMA-copies ROM [rom_start, rom_end) to ram_address, then scans
+# The stock character selector starts at row 2 (marker 0), the normal set.
+# Z cycles the descriptor at 0x805A5D08 to other authored variants. For each
+# racer, the selected loader row DMA-copies ROM [rom_start, rom_end) to ram_address, then scans
 # each 8-byte record and rebases G_DL/G_SETTIMG pointers into that source range.
-# The nine leading 8-byte entries are model display-list selectors; offset 0x90
-# is the package's shared geometry root. Slot-2 rows intentionally stay unused.
+# The nine leading 16-byte entries are model display-list selectors; offset 0x90
+# is the package's shared geometry root. The reserved slot-0 packages are not
+# the normal character-select defaults.
 [model_package_table]
 ram_address = "0x805A5D88"
 row_stride = 16
 rows_per_character = 8
-expected_marker = "0xFFFE0000"
+entry_stride = 16
+selected_slot = 2
+expected_marker = "0x00000000"
 
 [[model_packages]]
 name = "mario"
-row_index = 0
+row_index = 2
 ram_address = "0x805C6E10"
-rom_start = "0x1529820"
-rom_end = "0x152E4B0"
+rom_start = "0x1496740"
+rom_end = "0x149AA30"
 entry_count = 9
 geometry_root_offset = "0x90"
 
 [[model_packages]]
 name = "luigi"
-row_index = 8
+row_index = 10
 ram_address = "0x805CC610"
-rom_start = "0x152E4B0"
-rom_end = "0x1532EC0"
+rom_start = "0x149AA30"
+rom_end = "0x149ED10"
 entry_count = 9
 geometry_root_offset = "0x90"
 
 [[model_packages]]
 name = "yoshi"
-row_index = 16
+row_index = 18
 ram_address = "0x805D2610"
-rom_start = "0x1532EC0"
-rom_end = "0x1538F30"
+rom_start = "0x149ED10"
+rom_end = "0x14A49C0"
 entry_count = 9
 geometry_root_offset = "0x90"
 
 [[model_packages]]
 name = "toad"
-row_index = 24
+row_index = 26
 ram_address = "0x805DA210"
-rom_start = "0x1538F30"
-rom_end = "0x153B200"
+rom_start = "0x14A49C0"
+rom_end = "0x14A9230"
 entry_count = 9
 geometry_root_offset = "0x90"
 
 [[model_packages]]
 name = "d_kong"
-row_index = 32
+row_index = 34
 ram_address = "0x805E0610"
-rom_start = "0x153B200"
-rom_end = "0x1540D80"
+rom_start = "0x14A9230"
+rom_end = "0x14ADD70"
 entry_count = 9
 geometry_root_offset = "0x90"
 
 [[model_packages]]
 name = "wario"
-row_index = 40
+row_index = 42
 ram_address = "0x805E7E10"
-rom_start = "0x1540D80"
-rom_end = "0x1545B70"
+rom_start = "0x14ADD70"
+rom_end = "0x14B2100"
 entry_count = 9
 geometry_root_offset = "0x90"
 
 [[model_packages]]
 name = "peach"
-row_index = 48
+row_index = 50
 ram_address = "0x805EE610"
-rom_start = "0x1545B70"
-rom_end = "0x154AD70"
+rom_start = "0x14B2100"
+rom_end = "0x14B70E0"
 entry_count = 9
 geometry_root_offset = "0x90"
 
 [[model_packages]]
 name = "bowser"
-row_index = 56
+row_index = 58
 ram_address = "0x805F5610"
-rom_start = "0x154AD70"
-rom_end = "0x1551580"
+rom_start = "0x14B70E0"
+rom_end = "0x14BEAE0"
 entry_count = 9
 geometry_root_offset = "0x90"
 
@@ -265,6 +269,73 @@ address = "0x804ADE54"
 expected_word = "0x286603C0"
 replacement_word = "0x28660294"
 purpose = "bound Amped effect matrices to the 660-entry retail mtxEffect array"
+
+# Amped's star/lightning colour table (804AC248) is filled by gameplay hooks
+# outside this renderer-only import. Read retail's per-player animated RGB
+# instead: 80164B10 + playerId*2, green +0x10, blue +0x20. The original game
+# updates these once per tick; preserve Amped's light construction and cadence.
+[[code_patches]]
+address = "0x805A7850"
+expected_word = "0x00022040"
+replacement_word = "0x00121040"
+purpose = "source star and lightning RGB from the live retail player palette"
+
+[[code_patches]]
+address = "0x805A7854"
+expected_word = "0x00821021"
+replacement_word = "0x00000000"
+purpose = "source star and lightning RGB from the live retail player palette"
+
+[[code_patches]]
+address = "0x805A7858"
+expected_word = "0x3C04804B"
+replacement_word = "0x3C048016"
+purpose = "source star and lightning RGB from the live retail player palette"
+
+[[code_patches]]
+address = "0x805A785C"
+expected_word = "0x2484C248"
+replacement_word = "0x24844B10"
+purpose = "source star and lightning RGB from the live retail player palette"
+
+[[code_patches]]
+address = "0x805A7860"
+expected_word = "0x00021040"
+replacement_word = "0x00000000"
+purpose = "source star and lightning RGB from the live retail player palette"
+
+[[code_patches]]
+address = "0x805A786C"
+expected_word = "0x84440002"
+replacement_word = "0x84440010"
+purpose = "source star and lightning RGB from the live retail player palette"
+
+[[code_patches]]
+address = "0x805A7870"
+expected_word = "0x84450004"
+replacement_word = "0x84450020"
+purpose = "source star and lightning RGB from the live retail player palette"
+
+# Full articulated racers: reuse the renderer's original animated selector and
+# character-detail path after its original matrix, alpha and visibility setup.
+# Do not substitute a static near-LOD list for the animated model.
+[[code_patches]]
+address = "0x805A7490"
+expected_word = "0x14A0012B"
+replacement_word = "0x10000135"
+purpose = "primary racer selects articulated model and character detail"
+
+[[code_patches]]
+address = "0x805A7738"
+expected_word = "0x8042C132"
+replacement_word = "0x8FA20068"
+purpose = "visible remote racer preserves blue light argument for full model"
+
+[[code_patches]]
+address = "0x805A773C"
+expected_word = "0x10400144"
+replacement_word = "0x1000016A"
+purpose = "visible remote racer selects articulated model at all distances"
 
 # Code copied from the patched image and recompiled as MIPS functions by N64Recomp.
 # Extents are half-open; these cover the renderer and its complete traced custom call graph.

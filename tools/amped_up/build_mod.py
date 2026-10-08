@@ -180,6 +180,8 @@ def main() -> int:
     parser.add_argument("--offline-mod-recomp", type=Path, help="use an already-built OfflineModRecomp executable")
     parser.add_argument("--tool-build-dir", type=Path, default=ROOT / "build" / "amped_up" / "n64recomp", help="native pinned SDK tool build directory")
     parser.add_argument("--docker-image", default="mariokart64recomp-frame:latest", help="local image with clang-15 and ld.lld-15")
+    parser.add_argument("--output-nrm", type=Path, default=ROOT / "mods" / "amped_up.nrm",
+                        help="private NRM destination; use a path outside root mods when building the application")
     args = parser.parse_args()
 
     output_dir = ROOT / "build" / "amped_up"
@@ -290,7 +292,7 @@ def main() -> int:
         if missing_calls:
             raise ImportFailure("OfflineModRecomp output omitted traced call targets: " + ", ".join(missing_calls))
 
-        package_path = ROOT / "mods" / "amped_up.nrm"
+        package_path = args.output_nrm.resolve()
         package_path.parent.mkdir(parents=True, exist_ok=True)
         package_path.write_bytes(nrm_path.read_bytes())
         build_report = {

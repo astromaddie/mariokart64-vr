@@ -1,4 +1,5 @@
 #include <atomic>
+#include <array>
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -121,6 +122,28 @@ bool mk64_diag_input(int player, uint16_t* buttons, float*, float*) {
         if (pulse % 45 < 5) *buttons |= pulse / 45 == 0 ? 0x1000 : 0x8000;
     }
     return true;
+}
+// Process-only QA controls. No saved settings or ordinary launch path consumes
+// these; they are accepted only with the bounded native-menu autostart enabled.
+extern "C" void recomp_mk64_diag_option(uint8_t* rdram, recomp_context* ctx) {
+    static const auto options = [] {
+        std::array<int, 4> values{-1, -1, -1, -1};
+        const char* autostart = std::getenv("MK64_DIAG_AUTOSTART");
+        if (!autostart || std::atoi(autostart) <= 0) return values;
+        values[3] = std::clamp(std::atoi(autostart), 1, 120) * 30;
+        const char* names[] = {"MK64_DIAG_CHARACTER", "MK64_DIAG_COURSE", "MK64_DIAG_STAR_AT"};
+        const int maxima[] = {7, 19, 60};
+        for (int i = 0; i < 3; ++i) {
+            const char* raw = std::getenv(names[i]);
+            if (!raw || !*raw) continue;
+            char* end = nullptr;
+            const long value = std::strtol(raw, &end, 10);
+            if (*end == '\0' && value >= 0 && value <= maxima[i]) values[i] = int(value);
+        }
+        return values;
+    }();
+    const int index = _arg<0, int>(rdram, ctx);
+    _return(ctx, index >= 0 && index < int(options.size()) ? options[index] : -1);
 }
 extern "C" void recomp_mk64_frame_enabled(uint8_t*, recomp_context* ctx) {
     #ifdef MK64_VR

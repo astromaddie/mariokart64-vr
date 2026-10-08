@@ -1,4 +1,6 @@
 #include "patches.h"
+#include "vr_render.h"
+extern void func_8004F774(s32, s32);
 
 // HUD
 #if 1 // lap counter, Timer
@@ -210,3 +212,19 @@ RECOMP_PATCH void func_800591B4(void) {
     }
 }
 #endif
+// RT64's copy-mode rectangle has a fractional inclusive edge at high resolution.
+// Use the existing translucent timer path at full opacity: it uses exclusive
+// 8x16 bounds and unit texture steps, covering the complete rightmost texel.
+RECOMP_PATCH void print_timer(s32 x, s32 y, s32 time) {
+    if (mk64_vr_world()) {
+        func_8004F950(x, y, 255, time);
+    } else {
+        gSPDisplayList(gDisplayListHead++, (Gfx*) 0x0D008108);
+        gSPDisplayList(gDisplayListHead++, (Gfx*) 0x0D007EF8);
+        gDPSetAlphaCompare(gDisplayListHead++, G_AC_THRESHOLD);
+        load_texture_block_rgba16_mirror((u8*) 0x0D00C558, 104, 16);
+        func_8004F6D0(time);
+        func_8004F774(x, y);
+    }
+    gSPDisplayList(gDisplayListHead++, (Gfx*) 0x0D007EB8);
+}
