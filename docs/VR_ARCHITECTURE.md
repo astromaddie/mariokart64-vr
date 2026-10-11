@@ -1,45 +1,50 @@
 # Mario Kart 64 Recompiled VR architecture
 
-## Target and current evidence
+## Target and implementation
 
-The target is a standalone Steam Frame running a native Linux AArch64 build through Steam's
-ARM64 runtime. The flat renderer uses Vulkan through SDL2 and RT64. An Android/Lepton route is
-not part of the current build path.
+This port targets Steam Frame as a native Linux AArch64 application. It uses SDL2 and Vulkan
+through RT64, with OpenXR stereo rendering supplied by Plume. The original flat mode remains
+available. VR adds a tracked race view, first-person cockpit and arms, grip steering, hand-held
+items with throwing gestures, and a quick switch between first-person and chase views. Race
+menus, HUD, and cutscene presentation have their own panel or cinema paths. The first-person
+interaction is described in [its own section](#first-person-controls); data for the optional
+Amped Up models is covered in [AMPED_UP.md](AMPED_UP.md).
 
-The original renderer package remains the flat comparison baseline in
-`build-linux-aarch64/package/MarioKart64Recompiled`. Source now adopts the author's
-`upstream/NewFrontend` revision `621e7323692c98a1c1c944a0a19db88e94e51246`, with modern
-RT64/Plume, RecompFrontend and N64ModernRuntime. This is an explicit author-base upgrade,
-not a renderer-only backport. It retains the ARM64 build/provenance scripts and probe.
-The author's changes also alter audio/input, object angular culling and jumbotron guards;
-they must be distinguished from subsequent VR changes. The stock author frontend is retained;
-no custom VR UI or assets are approved or implemented.
+### Build and device history
 
-The pinned-source ARM64 build, package and dependency checks pass. A 30-second Xvfb/lavapipe
+The renderer and runtime use the author's modern `upstream/NewFrontend` base, with the original
+stock frontend retained. The following records identify the builds and device checks used during
+development. See [Frame performance](FRAME_PERFORMANCE.md) for measurements and their scope.
+
+The flat renderer package remains the comparison baseline in
+`build-linux-aarch64/package/MarioKart64Recompiled`. Source adopts `upstream/NewFrontend`
+revision `621e7323692c98a1c1c944a0a19db88e94e51246`, with modern RT64/Plume, RecompFrontend and
+N64ModernRuntime. The author's changes also alter audio/input, object angular culling and
+jumbotron guards; those changes are distinct from the VR additions.
+
+The pinned-source ARM64 build, package and dependency checks passed. A 30-second Xvfb/lavapipe
 smoke run loaded the application UI assets and stayed open until its timeout. The package's
-`BUILD-METADATA.json` and `build-linux-aarch64/logs` record that host evidence. The smoke image
-has no D-Bus session bus, so SDL prints a D-Bus assertion during timeout shutdown. A separate
-native probe created a SteamVR/OpenXR session and submitted one stereo frame. A second probe
-run read back those submitted images and verified distinct uniform left/right colors on the
-Frame GPU. The flat game launches through Steam and its launcher has been captured through
-Gamescope. The original flat game reached attract-mode racing on the Frame. The modern diagnostic flat
-package `15343d9c…584a7` reached a real one-player Luigi Raceway race through the original menus:
-production frames 630–1140 advanced 30/second while VI advanced 60/second, and the race timer,
-AI state digest and audio counters advanced. The corrected native VR package `d770b106…a5a0743b`
-matched all 68 common simulation samples at game frames 630–2640, including native race clock
-and all eight players. Actual submitted eye/HUD images were inspected at yaw 0/90/180/270.
-The final clean-source package `dbcd585e…7850ca2` also passed a native 60-second stock run
-with the saved 0.05 m near plane: its 38 common simulation samples at frames 630–1740
-matched the same flat baseline, and its submitted eye image retained the corrected floor.
-The user subsequently reached and completed a race while wearing the predecessor
-build, reporting costume, racer-detail, billboard, star and HUD issues. The revised
-application is built from `f1ee10c450d91fdeb0d79e19c3691e2d00623bb7`, SHA256
-`d8ffc8aacc5d0b88c7fddf68f39f8b0d92e2d073ede72460564081636efc93ec`, with external
-standard/full-detail model NRM `26a3afd6…`. Native all-eight-racer draws, Mario
-front appearance, Wario star onset/expiry, and translated Moo Moo Farm billboard
-views were inspected. Mario Raceway, Luigi Raceway and Moo Moo Farm have unattended
-scene coverage; full-course driving and the revised build's worn acceptance remain
-pending. See [model checks](AMPED_UP.md#native-checks-after-wearer-feedback).
+`BUILD-METADATA.json` and `build-linux-aarch64/logs` contain that host evidence. The smoke
+container has no D-Bus session bus, so SDL prints a D-Bus assertion during timeout shutdown. A
+separate native probe created a SteamVR/OpenXR session and submitted a stereo frame; readback
+confirmed distinct left and right images on the Frame GPU. The flat game launched through Steam
+and reached attract-mode racing. Diagnostic flat package `15343d9c…584a7` reached a real one-player
+Luigi Raceway race through the original menus: production frames 630–1140 advanced at 30 per
+second while VI advanced at 60 per second, and the race timer, AI state digest and audio counters
+advanced. Native VR package `d770b106…a5a0743b` matched all 68 common simulation samples at game
+frames 630–2640, including the race clock and all eight players. Submitted eye and HUD images were
+inspected at yaw 0/90/180/270. Clean-source package `dbcd585e…7850ca2` passed a native 60-second
+stock run with a saved 0.05 m near plane: its 38 common simulation samples at frames 630–1740
+matched the flat baseline, and its submitted eye image retained the corrected floor.
+
+An earlier play session completed a race and led to fixes for costume, racer-detail, billboard,
+star and HUD issues. The revised application source is
+`f1ee10c450d91fdeb0d79e19c3691e2d00623bb7` (SHA256
+`d8ffc8aacc5d0b88c7fddf68f39f8b0d92e2d073ede72460564081636efc93ec`), with external standard /
+full-detail model NRM `26a3afd6…`. Native all-eight-racer draws, Mario's front appearance, Wario's
+star onset/expiry, and translated Moo Moo Farm billboard views were inspected. Mario Raceway,
+Luigi Raceway and Moo Moo Farm have scene coverage; this does not establish every course and
+condition. See [model checks](AMPED_UP.md#native-checks-after-wearer-feedback).
 
 ## Camera and simulation
 

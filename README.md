@@ -1,32 +1,57 @@
-# Mario Kart 64: Recompiled — Steam Frame VR fork
+# Mario Kart 64 VR for Steam Frame
 
-**Status: EXPERIMENTAL. No Steam Frame build or release has been published.** Upstream is [sonicdcer/MarioKart64Recomp](https://gitlab.com/sonicdcer/MarioKart64Recomp). This fork adds an optional native OpenXR stereo path targeting standalone Steam Frame on Linux ARM64 with SteamVR/OpenXR and Vulkan through RT64/Plume, plus first-person kart and item presentation; flat mode remains the default.
+This is my Steam Frame fork of [Mario Kart 64 Recompiled](https://gitlab.com/sonicdcer/MarioKart64Recomp). It adds native OpenXR stereo play to the Linux ARM64 game, using SteamVR, Vulkan, RT64 and Plume. Flat mode remains available.
 
-| Evidence | Verified status |
-| --- | --- |
-| Host/source | ROM-free production VR bridge, profile, first-person and diagnostic tests, RT64 eye-slot tests and source-contract checks compiled on macOS ARM64; CTest 8/8 passed on 2026-10-11 for the PR0 production-source changes. The public [ROM-free workflow](.github/workflows/public-vr-validation.yml) is configured without secrets; the Ubuntu 22.04 GitHub run passed at the immutable source commit in PR0_METADATA.json. |
-| Unattended Frame | Earlier off-head builds verified OpenXR stereo submission, gameplay captures and simulation parity. A predecessor full-detail package passed 120 Hz sampling without missed predicted periods; newer cockpit/item paths are not covered by that evidence. |
-| Worn | A predecessor build was worn for one race and had reported rendering issues. The revised source/package has not passed wearer retest; full-course coverage remains pending. |
+**EXPERIMENTAL.** This is a personal-use project and is still a work in progress. You need a supported US Mario Kart 64 ROM from your own copy of the game. Optional Amped Up content also needs the official v3.21 patch and a generated NRM. The ROM, patch and generated game data are not included.
 
-**Known failures and limits:** predecessor rendering issues remain unresolved on the revised build; physical controller actions, item throws, comfort, and current-source cockpit/item performance are unverified. No complete application or package build is claimed. Immutable tested source and CI run are recorded in [PR0 metadata](docs/PR0_METADATA.json).
+## What the Frame fork adds
 
-**External game data:** a personally owned supported US ROM is required for a full build. Optional Amped Up content also requires the official v3.21 patch and generated NRM. Keep all game data outside Git and CI artifacts.
+- Tracked stereo racing, with menus and the HUD presented on panels and race scenes in the 3D view.
+- A seated first-person kart view with a cockpit, visible arms and a grip-operated steering wheel. Steering remains tied to the kart when you look around; releasing both grips returns steering to the left stick.
+- Optional over-shoulder item handling. Hold an item beside either shoulder and throw with a backward arm swing; forward and rear throws follow the item's game behavior.
+- A quick first-person/chase-view toggle on View. Hold View to recenter without switching views.
+- Steam Frame controls and a native Linux ARM64 build and install path. Without an active OpenXR runtime the game runs flat.
 
-Run the public, ROM-free production-source checks from a clean checkout:
+The first-person controls and renderer integration are described in [VR architecture](docs/VR_ARCHITECTURE.md). See [Amped Up data requirements](docs/AMPED_UP.md) for the optional patch and model data, and [Frame performance notes](docs/FRAME_PERFORMANCE.md) for recorded measurements and their scope.
+
+## Build
+
+Use Docker on ARM64 Linux or an ARM64 Docker environment on Apple Silicon. The build script creates its pinned compiler image and packages the game.
+
+Build the Frame version with your own supported US ROM:
+
+```sh
+git clone --recurse-submodules --branch main https://github.com/astromaddie/mariokart64-vr.git
+cd mariokart64-vr
+export MK64_ROM="/path/to/owned-us-rom.z64"
+MK64_VR=ON JOBS=4 tools/docker/build-linux.sh all
+```
+
+The Frame package and generated game data stay outside Git. See [BUILDING.md](BUILDING.md) for prerequisites, build steps, and installation details.
+
+To update the existing `MarioKart64VR` Steam entry, copy the package and your own ROM to the Frame:
+
+```sh
+export FRAME_HOST="steamos@YOUR_FRAME_ADDRESS"
+ssh "$FRAME_HOST" 'mkdir -p ~/devkit-game/MarioKart64VR ~/.local/share/MK64FrameVR'
+rsync -a --delete build-linux-aarch64/package/MarioKart64Recompiled/ \
+  "$FRAME_HOST:devkit-game/MarioKart64VR/"
+rsync -a "$MK64_ROM" "$FRAME_HOST:.local/share/MK64FrameVR/mk64.us.z64"
+```
+
+Then launch `MarioKart64VR` from the Frame's Steam library so SteamVR supplies controller input.
+
+## ROM-free VR checks
+
+The [VR validation workflow](.github/workflows/public-vr-validation.yml) runs without a ROM or repository secrets. You can run the same production-source checks locally after cloning the dependencies above, with CMake, Ninja and a C++ compiler:
 
 ```sh
 bash tools/vr/prepare-public-dependencies.sh
-cmake -S src/vr/tests -B build-vrtest -G Ninja
-cmake --build build-vrtest --parallel 2
+cmake -S src/vr/tests -B build-vrtest -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-vrtest
 ctest --test-dir build-vrtest --output-on-failure
 ```
 
-A complete local build requires your owned ROM and its existing hash validation:
+## Upstream and licenses
 
-```sh
-MK64_ROM="/path/to/owned-us-rom.z64" MK64_VR=ON JOBS=4 tools/docker/build-linux.sh all
-```
-
-See [PR0 readiness and evidence](docs/PR0_READINESS.md), [VR architecture and wearer checklist](docs/VR_ARCHITECTURE.md), [Amped Up data requirements](docs/AMPED_UP.md), [Frame performance history](docs/FRAME_PERFORMANCE.md), and the [README retained for history](docs/README_PRE_PR0.md). Upstream licenses and notices remain in their original files.
-
-The host application retains its upstream [GPLv3 notice](COPYING); RT64 and Plume retain their own MIT notices. These code licenses do not grant permission to redistribute the commercial game, ROMs or extracted media. Immutable source/CI identity is in [PR0 metadata](docs/PR0_METADATA.json).
+The fork retains Mario Kart 64 Recompiled's upstream notices and license. The earlier [PR0 readiness audit](docs/PR0_READINESS.md), [source and CI metadata](docs/PR0_METADATA.json), and [README history](docs/README_PRE_PR0.md) remain available as historical records. The host application retains its upstream [GPLv3 notice](COPYING); RT64 and Plume retain their own MIT notices. Code licenses do not grant permission to redistribute the commercial game, ROMs or extracted media. Bring your own game data.
