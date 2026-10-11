@@ -4,11 +4,11 @@
 
 | Evidence | Verified status |
 | --- | --- |
-| Host/source | ROM-free production VR bridge, profile, first-person and diagnostic tests, RT64 eye-slot tests and source-contract checks compiled on macOS ARM64; CTest 8/8 passed on 2026-10-11 from base `c4b901a04f96b264a0ac710d210a627e238b3e79` plus the PR0 changes. The public [ROM-free workflow](.github/workflows/public-vr-validation.yml) is configured without secrets; no remote GitHub run has been observed. |
+| Host/source | ROM-free production VR bridge, profile, first-person and diagnostic tests, RT64 eye-slot tests and source-contract checks compiled on macOS ARM64; CTest 8/8 passed on 2026-10-11 for the PR0 production-source changes. The public [ROM-free workflow](.github/workflows/public-vr-validation.yml) is configured without secrets; the Ubuntu 22.04 GitHub run passed at the immutable source commit in PR0_METADATA.json. |
 | Unattended Frame | Earlier off-head builds verified OpenXR stereo submission, gameplay captures and simulation parity. A predecessor full-detail package passed 120 Hz sampling without missed predicted periods; newer cockpit/item paths are not covered by that evidence. |
 | Worn | A predecessor build was worn for one race and had reported rendering issues. The revised source/package has not passed wearer retest; full-course coverage remains pending. |
 
-**Known failures and limits:** predecessor rendering issues remain unresolved on the revised build; physical controller actions, item throws, comfort, and current-source cockpit/item performance are unverified. No complete application or package build is claimed. Tested source is the base above plus the PR0 change set; the coordinator will record the integrated source commit.
+**Known failures and limits:** predecessor rendering issues remain unresolved on the revised build; physical controller actions, item throws, comfort, and current-source cockpit/item performance are unverified. No complete application or package build is claimed. Immutable tested source and CI run are recorded in [PR0 metadata](docs/PR0_METADATA.json).
 
 **External game data:** a personally owned supported US ROM is required for a full build. Optional Amped Up content also requires the official v3.21 patch and generated NRM. Keep all game data outside Git and CI artifacts.
 
@@ -28,3 +28,5 @@ MK64_ROM="/path/to/owned-us-rom.z64" MK64_VR=ON JOBS=4 tools/docker/build-linux.
 ```
 
 See [PR0 readiness and evidence](docs/PR0_READINESS.md), [VR architecture and wearer checklist](docs/VR_ARCHITECTURE.md), [Amped Up data requirements](docs/AMPED_UP.md), [Frame performance history](docs/FRAME_PERFORMANCE.md), and the [README retained for history](docs/README_PRE_PR0.md). Upstream licenses and notices remain in their original files.
+
+The host application retains its upstream [GPLv3 notice](COPYING); RT64 and Plume retain their own MIT notices. These code licenses do not grant permission to redistribute the commercial game, ROMs or extracted media. Immutable source/CI identity is in [PR0 metadata](docs/PR0_METADATA.json).
