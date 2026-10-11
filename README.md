@@ -14,9 +14,18 @@ This is my Steam Frame fork of [Mario Kart 64 Recompiled](https://gitlab.com/son
 
 The first-person controls and renderer integration are described in [VR architecture](docs/VR_ARCHITECTURE.md). See [Amped Up data requirements](docs/AMPED_UP.md) for the optional patch and model data, and [Frame performance notes](docs/FRAME_PERFORMANCE.md) for recorded measurements and their scope.
 
-## Build
+## Build and install
 
-Use Docker on ARM64 Linux or an ARM64 Docker environment on Apple Silicon. The build script creates its pinned compiler image and packages the game.
+You don't need a Mac. The Docker script builds the same **Linux ARM64 Frame package** from these hosts:
+
+| Build machine | Route |
+| --- | --- |
+| Frame Desktop or another ARM64 Linux machine | Docker Engine; native ARM64 build |
+| Windows PC | WSL2 Ubuntu + Docker Desktop, with WSL integration enabled |
+| macOS, Apple Silicon or Intel | Docker Desktop, or an ARM64-capable Docker environment |
+| x86_64 Linux PC | Docker Engine with ARM64 emulation configured |
+
+On x86_64 computers the compiler runs under ARM64 emulation, which can be much slower. You'll need Bash, Git, Python 3 and `shasum` on the host as well as a running Docker engine. [BUILDING.md](BUILDING.md) covers setup, building on Frame Desktop, first installation and Windows paths.
 
 Build the Frame version with your own supported US ROM:
 
@@ -27,19 +36,7 @@ export MK64_ROM="/path/to/owned-us-rom.z64"
 MK64_VR=ON JOBS=4 tools/docker/build-linux.sh all
 ```
 
-The Frame package and generated game data stay outside Git. See [BUILDING.md](BUILDING.md) for prerequisites, build steps, and installation details.
-
-To update the existing `MarioKart64VR` Steam entry, copy the package and your own ROM to the Frame:
-
-```sh
-export FRAME_HOST="steamos@YOUR_FRAME_ADDRESS"
-ssh "$FRAME_HOST" 'mkdir -p ~/devkit-game/MarioKart64VR ~/.local/share/MK64FrameVR'
-rsync -a --delete build-linux-aarch64/package/MarioKart64Recompiled/ \
-  "$FRAME_HOST:devkit-game/MarioKart64VR/"
-rsync -a "$MK64_ROM" "$FRAME_HOST:.local/share/MK64FrameVR/mk64.us.z64"
-```
-
-Then launch `MarioKart64VR` from the Frame's Steam library so SteamVR supplies controller input.
+The result is `build-linux-aarch64/package/MarioKart64Recompiled/`. On Frame Desktop, copy that whole folder somewhere permanent and add `LAUNCH-STEAM-FRAME.sh` to Steam with launch options `--game mk64`. From another computer, upload that folder with Valve's SteamOS Devkit Client using the Linux ARM64 runtime. Keep your ROM at `~/.local/share/MK64FrameVR/mk64.us.z64` on the Frame. Launch from the Frame's Steam library so SteamVR supplies controller input.
 
 ## ROM-free VR checks
 
