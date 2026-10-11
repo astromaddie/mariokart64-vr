@@ -2,7 +2,7 @@
   "schema_version": 1,
   "milestone": "PR0",
   "status": "EXPERIMENTAL",
-  "publication_status": "ready for experimental public source; no binary release",
+  "publication_status": "public experimental source; no binary release",
   "tested_commit": "ecd49d581b984ebd3e587572c5fbac58b94f8d1b",
   "supported_targets": [
     "Steam Frame native Linux ARM64 / SteamVR OpenXR / Vulkan"
@@ -11,17 +11,17 @@
     "host_result": "ROM-free production-source CMake/CTest passed 8/8 on current source in an isolated empty-HOME checkout",
     "public_ci": {
       "repository": "astromaddie/mariokart64-vr",
-      "commit": "ecd49d581b984ebd3e587572c5fbac58b94f8d1b",
-      "run_id": 38111109912,
-      "run_url": "https://github.com/astromaddie/mariokart64-vr/actions/runs/38111109912",
-      "job_url": "https://github.com/astromaddie/mariokart64-vr/actions/runs/38111109912/job/114386686200",
-      "event": "push",
+      "commit": "2dc16430e8c97dec640a5f4305f0211a1921e9e6",
+      "run_id": 38122892712,
+      "run_url": "https://github.com/astromaddie/mariokart64-vr/actions/runs/38122892712",
+      "job_id": 114421274906,
+      "job_url": "https://github.com/astromaddie/mariokart64-vr/actions/runs/38122892712/job/114421274906",
       "status": "completed",
-      "conclusion": "failure",
-      "job_id": 114386686200,
-      "job_name": "ROM-free VR host tests",
-      "steps_run": 0,
-      "job_not_started_reason": "GitHub did not start the job because recent account payments failed or the spending limit needs to be increased; no workflow steps ran."
+      "conclusion": "success",
+      "steps_run": 7,
+      "attempt": 2,
+      "game_data": "none",
+      "repository_secrets": "none"
     },
     "full_application_build": {
       "result": "PASS",
@@ -63,6 +63,20 @@
           ]
         }
       ]
+    },
+    "historical_billing_blocked_ci": {
+      "repository": "astromaddie/mariokart64-vr",
+      "commit": "ecd49d581b984ebd3e587572c5fbac58b94f8d1b",
+      "run_id": 38111109912,
+      "run_url": "https://github.com/astromaddie/mariokart64-vr/actions/runs/38111109912",
+      "job_url": "https://github.com/astromaddie/mariokart64-vr/actions/runs/38111109912/job/114386686200",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "job_id": 114386686200,
+      "job_name": "ROM-free VR host tests",
+      "steps_run": 0,
+      "job_not_started_reason": "GitHub did not start the job because recent account payments failed or the spending limit needs to be increased; no workflow steps ran."
     }
   },
   "dependencies": {

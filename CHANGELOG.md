@@ -11,3 +11,7 @@
 - Updated readiness evidence to current source `ecd49d581b984ebd3e587572c5fbac58b94f8d1b`; ROM-free production-source CMake/CTest passed 8/8.
 - Built and packaged the full Linux ARM64 application with `JOBS=4`; package and ABI checks passed, and the 30-second host launch smoke stayed open until timeout. The package contains no ROM files; generated outputs were removed after recording the artifact identity.
 - The latest exact-source GitHub job did not start because of the account billing/spending-limit block; the earlier successful run is retained in PR0_METADATA.json.
+
+## 2026-10-11 — Public experimental source
+
+- Made the repository public and confirmed the ROM-free GitHub validation passes without private secrets or game data.

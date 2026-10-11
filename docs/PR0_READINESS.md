@@ -1,10 +1,10 @@
 # PR0 — mariokart64-vr
 
-**EXPERIMENTAL — ready for public source.** Based on [sonicdcer/MarioKart64Recomp](https://gitlab.com/sonicdcer/MarioKart64Recomp), targeting native Linux ARM64 Steam Frame, SteamVR/OpenXR and Vulkan. No binary release was uploaded.
+**EXPERIMENTAL — public source.** Based on [sonicdcer/MarioKart64Recomp](https://gitlab.com/sonicdcer/MarioKart64Recomp), targeting native Linux ARM64 Steam Frame, SteamVR/OpenXR and Vulkan. No binary release was uploaded.
 
 At `ecd49d581b984ebd3e587572c5fbac58b94f8d1b`, the ROM-free production VR CMake/CTest suite passed 8/8 from a clean checkout with an empty home and no personal Git credentials. Public RT64/Plume bases and the hash-pinned VR overlays resolved correctly. The complete ARM64 application, package, ABI check and 30-second Xvfb launch smoke also passed. The package has 43 files and no ROM files; its binary hash is recorded in the metadata.
 
-The automatic [public validation workflow](../.github/workflows/public-vr-validation.yml) uses no ROMs or repository secrets. The latest private-repo job ran no steps because GitHub blocked it on account billing; this is recorded separately from the successful local checks. Earlier successful CI runs remain in [PR0_METADATA.json](PR0_METADATA.json).
+The automatic [public validation workflow](../.github/workflows/public-vr-validation.yml) uses no ROMs or repository secrets. The [current public CI run](https://github.com/astromaddie/mariokart64-vr/actions/runs/38122892712) passed, including checkout, dependency setup, compilation and tests. Earlier CI results remain in [PR0_METADATA.json](PR0_METADATA.json).
 
 The history audit found no ROMs, extracted game-data payloads or personal credentials. Project branding and gameplay captures remain separate from the source licenses. Upstream GPLv3 host notices in `COPYING` and renderer/component notices are preserved; they do not give permission to distribute Nintendo's game or data.
 
