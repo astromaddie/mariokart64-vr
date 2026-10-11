@@ -88,6 +88,10 @@ run_step() {
 	"${args[@]}" "$image" bash tools/docker/container-steps.sh "$name"
 }
 
+prepare_vr_dependencies() {
+	bash "$repo/tools/vr/prepare-public-dependencies.sh"
+}
+
 case "$step" in
 	image)
 		build_image
@@ -96,13 +100,24 @@ case "$step" in
 		require_image
 		run_step tools
 		;;
-	recomp | build | package | abi | smoke)
+	recomp | package | abi | smoke)
 		require_image
 		capture_source
 		run_step "$step"
 		;;
+	build)
+		require_image
+		capture_source
+		case "${MK64_VR:-OFF}" in
+			ON|on|1|TRUE|true) prepare_vr_dependencies ;;
+		esac
+		run_step "$step"
+		;;
 	all)
 		check_rom
+		case "${MK64_VR:-OFF}" in
+			ON|on|1|TRUE|true) prepare_vr_dependencies ;;
+		esac
 		if ! docker image inspect "$image" >/dev/null 2>&1; then
 			build_image
 		fi

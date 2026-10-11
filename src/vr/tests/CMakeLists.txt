@@ -5,6 +5,12 @@ project(dk64vr_tests LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 
+# The profile and first-person host tests use assert() for their checks. Keep them live even
+# when the caller selects Release (as the public CI does).
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-UNDEBUG)
+endif()
+
 set(DK64VR_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../..)
 add_executable(dk64vr_tests
     ${CMAKE_CURRENT_LIST_DIR}/dk64vr_tests.cpp

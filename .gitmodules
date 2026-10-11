@@ -12,7 +12,7 @@
 	url = https://github.com/sammycage/lunasvg
 [submodule "lib/rt64"]
 	path = lib/rt64
-	url = https://github.com/astromaddie/dk64-vr-rt64
+	url = https://github.com/rt64/rt64.git
 [submodule "lib/sse2neon"]
 	path = lib/sse2neon
 	url = https://github.com/DLTcollab/sse2neon
