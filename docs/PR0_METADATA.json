@@ -2,14 +2,44 @@
   "schema_version": 1,
   "milestone": "PR0",
   "status": "EXPERIMENTAL",
-  "publication_status": "private preparation; no release published",
-  "tested_commit": "6de8a24245673d4a17da48d629bcc951db2d467d",
+  "publication_status": "ready for experimental public source; no binary release",
+  "tested_commit": "ecd49d581b984ebd3e587572c5fbac58b94f8d1b",
   "supported_targets": [
     "Steam Frame native Linux ARM64 / SteamVR OpenXR / Vulkan"
   ],
   "validation": {
-    "host_result": "ROM-free production-source CMake/CTest passed 8/8 in an isolated empty-HOME checkout",
+    "host_result": "ROM-free production-source CMake/CTest passed 8/8 on current source in an isolated empty-HOME checkout",
     "public_ci": {
+      "repository": "astromaddie/mariokart64-vr",
+      "commit": "ecd49d581b984ebd3e587572c5fbac58b94f8d1b",
+      "run_id": 38111109912,
+      "run_url": "https://github.com/astromaddie/mariokart64-vr/actions/runs/38111109912",
+      "job_url": "https://github.com/astromaddie/mariokart64-vr/actions/runs/38111109912/job/114386686200",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "failure",
+      "job_id": 114386686200,
+      "job_name": "ROM-free VR host tests",
+      "steps_run": 0,
+      "job_not_started_reason": "GitHub did not start the job because recent account payments failed or the spending limit needs to be increased; no workflow steps ran."
+    },
+    "full_application_build": {
+      "result": "PASS",
+      "source_commit": "ecd49d581b984ebd3e587572c5fbac58b94f8d1b",
+      "target": "Linux ARM64 Steam Frame package",
+      "command": "MK64_VR=ON JOBS=4 BUILD_DIR=build-linux-aarch64-vr-pr0 tools/docker/build-linux.sh all (local supported US ROM supplied through MK64_ROM)",
+      "image_id": "sha256:6cd15fa7941a706358920701a1ccb504852e8ebf1df6ebb0f4b92de6814455f4",
+      "artifact": {
+        "architecture": "aarch64",
+        "bytes": 18272008,
+        "sha256": "cbf9edd283ba357b5eb966cb0e8c1edb565d02ea58200ca3ad694052b5f6b007",
+        "package_files": 43,
+        "rom_files": 0
+      },
+      "host_smoke": "Xvfb launch remained open until the 30-second timeout (exit 124 accepted by the build script); this is package launch evidence, not device or input verification",
+      "cleanup": "Build outputs and the disposable checkout were removed after recording the artifact identity"
+    },
+    "historical_passing_public_ci": {
       "repository": "astromaddie/mariokart64-vr",
       "commit": "6de8a24245673d4a17da48d629bcc951db2d467d",
       "run_id": 38100565685,
@@ -33,8 +63,7 @@
           ]
         }
       ]
-    },
-    "full_application_build": "not run; external owned ROM required"
+    }
   },
   "dependencies": {
     "rt64_public_commit": "43373749dac9bbc1b653e6a02aed40a9e1783bed",
@@ -42,22 +71,33 @@
     "plume_public_commit": "d890ac899e505fb30040e037a4037cdeca68f033",
     "plume_overlay_sha256": "99fbdb9731416e35cbc5854bf977cf8fc3679655246462f6e6fed145d18294db",
     "root_gitlinks": "All 19 direct root gitlinks across the three ports fetched anonymously by exact SHA; this is not a complete application build",
-    "anonymous_recursive_checkout": {
+    "historical_anonymous_recursive_checkout": {
       "source_commit": "6de8a24245673d4a17da48d629bcc951db2d467d",
       "result": "PASS",
       "direct_gitlinks": 9,
       "recursive_submodules": 47,
       "abnormal_submodule_statuses": 0,
       "isolation": "Fresh empty HOME, system/global Git config disabled, no credentials or personal Git configuration",
-      "scope": "Dependency availability only; no full game build or ROM access"
+      "scope": "Dependency availability only; no full game build or ROM access. This historical record is for an earlier tested commit, not the current branch head."
+    },
+    "current_source_dependency_setup": {
+      "source_commit": "ecd49d581b984ebd3e587572c5fbac58b94f8d1b",
+      "result": "PASS",
+      "direct_gitlinks": 9,
+      "recursive_submodules": 47,
+      "revision_mismatches": 0,
+      "dirty_submodules": 2,
+      "isolation": "Fresh local clone, empty HOME, system/global Git configuration disabled, no credentials; all source dependencies fetched anonymously from public URLs",
+      "scope": "All recursive source pins resolved at exact parent revisions; RT64/Plume public bases and SHA-256-pinned VR overlays applied. The two dirty submodules contain the requested overlays.",
+      "recomp_frontend_public_pin": {
+        "repository": "N64Recomp/RecompFrontend",
+        "commit": "c3bc7a2e9eff532c7f55b28d78fc4e07afb923aa"
+      },
+      "all_current_source_direct_pins_fetched_anonymously": true
     }
   },
-  "focused_headset_acceptance": "pending for current source candidate",
-  "sustained_worn_performance": "unmeasured on current candidate",
   "license_scope": "Upstream host application GPLv3 notices in COPYING are retained. RT64/Plume keep their own MIT notices. These licenses do not grant redistribution rights to commercial ROMs, extracted media, saves or proprietary libraries.",
-  "distribution_blockers": [
-    "Game screenshots, logos and optional media still require provenance review",
-    "Full clean application build and focused headset acceptance remain open"
-  ],
-  "changelog": "CHANGELOG.md"
+  "distribution_blockers": [],
+  "changelog": "CHANGELOG.md",
+  "media_inventory": "Project branding and gameplay captures are retained separately from code notices; no ROMs, extracted game-data files or personal signing material were found."
 }
