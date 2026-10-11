@@ -4,6 +4,8 @@ This is my Steam Frame fork of [Mario Kart 64 Recompiled](https://gitlab.com/son
 
 **EXPERIMENTAL.** This is a personal-use project and is still a work in progress. You need a supported US Mario Kart 64 ROM from your own copy of the game. Optional Amped Up content also needs the official v3.21 patch and a generated NRM. The ROM, patch and generated game data are not included.
 
+**Want to play on Steam Frame?** Download the prebuilt standalone package from the [v0.1.0 prerelease](https://github.com/astromaddie/mariokart64-vr/releases/tag/v0.1.0); no compiler is needed. You still need your own supported US Mario Kart 64 ROM. Optional Amped Up content also requires its official patch and generated data.
+
 ## What the Frame fork adds
 
 - Tracked stereo racing, with menus and the HUD presented on panels and race scenes in the 3D view.
