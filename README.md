@@ -6,6 +6,8 @@ This is my Steam Frame fork of [Mario Kart 64 Recompiled](https://gitlab.com/son
 
 **Want to play on Steam Frame?** Download the prebuilt standalone package from the [v0.1.0 prerelease](https://github.com/astromaddie/mariokart64-vr/releases/tag/v0.1.0); no compiler is needed. You still need your own supported US Mario Kart 64 ROM. Optional Amped Up content also requires its official patch and generated data.
 
+*You can also add the MK64 Reloaded texture pack. After installing and running the game once on the Frame, use SSH and go the ~/.local/share/MK64FrameVR/mods folder. Download the MK64 Reloaded RTZ file at [https://evilgames.eu/texture-packs/mk64-reloaded.htm](https://evilgames.eu/texture-packs/mk64-reloaded.htm) and copy this to the mod folder. Start the game again. It might take a bit to start the first time after adding the texture pack.
+
 ## What the Frame fork adds
 
 - Tracked stereo racing, with menus and the HUD presented on panels and race scenes in the 3D view.
